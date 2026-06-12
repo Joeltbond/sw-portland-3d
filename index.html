@@ -3,34 +3,57 @@
 <head>
   <meta charset="utf-8" />
   <title>SW Portland — 3D</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-  <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <script src="https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.js"></script>
+  <link href="https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.css" rel="stylesheet" />
   <style>
-    html, body { margin: 0; height: 100%; }
+    html, body { margin: 0; height: 100%; overflow: hidden; }
     #map { height: 100%; }
     #hud {
       position: absolute; top: 10px; left: 10px; z-index: 2;
-      background: rgba(20,20,20,.75); color: #eee; padding: 8px 12px;
+      background: rgba(20,20,20,.78); color: #eee; padding: 8px 12px;
       font: 13px/1.5 -apple-system, system-ui, sans-serif; border-radius: 6px;
-      max-width: 280px;
+      max-width: 300px;
     }
     #hud b { color: #fff; }
     .spot { cursor: pointer; color: #8cf; }
     .spot:hover { text-decoration: underline; }
+    #fp-bar { margin-top: 6px; }
+    #fp-bar button {
+      background: #2e6da4; color: #fff; border: 0; border-radius: 4px;
+      padding: 5px 10px; font: 13px -apple-system, system-ui, sans-serif; cursor: pointer;
+    }
+    #fp-bar button:hover { background: #3b82c4; }
+    #fp-help { display: none; margin-top: 6px; color: #cdd; font-size: 12px; }
+    #crosshair {
+      display: none; position: absolute; left: 50%; top: 50%; z-index: 2;
+      width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%;
+      background: rgba(255,255,255,.7); box-shadow: 0 0 4px rgba(0,0,0,.6);
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
 <div id="map"></div>
+<div id="crosshair"></div>
 <div id="hud">
   <b>Southwest Portland — 3D</b><br/>
-  Drag to pan · right-drag (or two fingers) to tilt/rotate · scroll to zoom.<br/>
+  <span id="orbit-help">Drag to pan · right-drag (or two fingers) to tilt/rotate · scroll to zoom.<br/></span>
   Fly to:
   <span class="spot" data-v="-122.6995,45.4992,14.5,60,210">OHSU / Marquam Hill</span> ·
   <span class="spot" data-v="-122.7076,45.4983,14,55,150">Council Crest</span> ·
   <span class="spot" data-v="-122.7095,45.4737,15,55,0">Hillsdale</span> ·
   <span class="spot" data-v="-122.7126,45.4530,15.5,55,30">Multnomah Village</span> ·
   <span class="spot" data-v="-122.6789,45.5085,15,60,330">Downtown south</span>
+  <div id="fp-bar">
+    <button id="fp-btn" disabled>▶ Walk around here (F)</button>
+    <button id="fp-mode" style="display:none">mode: walk (T)</button>
+  </div>
+  <div id="fp-help">
+    <b>WASD</b> move · <b>mouse</b> look · <b>Shift</b> sprint · <b>T</b> walk/fly ·
+    <b>Space/C</b> up/down (fly) · <b>Esc</b> exit<br/>
+    Touch: <b>left half</b> = move stick · <b>right half</b> = look
+  </div>
 </div>
 <script>
   const map = new maplibregl.Map({
@@ -41,7 +64,7 @@
     pitch: 62,
     bearing: 205,                 // looking southwest into the hills
     hash: true,                   // camera state in the URL — shareable views
-    maxPitch: 75,
+    maxPitch: 104,                // >90 lets first-person look slightly upward
     antialias: true
   });
 
@@ -83,14 +106,208 @@
         'fill-extrusion-opacity': 0.85
       }
     }, firstSymbol);
+
+    document.getElementById('fp-btn').disabled = false;
   });
 
   document.querySelectorAll('.spot').forEach(el => {
     el.addEventListener('click', () => {
+      if (fp.on) fpExit();
       const [lng, lat, zoom, pitch, bearing] = el.dataset.v.split(',').map(Number);
       map.flyTo({ center: [lng, lat], zoom, pitch, bearing, duration: 2500 });
     });
   });
+
+  // ============ First-person walk/fly mode ============
+  const fp = {
+    on: false, mode: 'walk',
+    lng: 0, lat: 0, alt: 0,
+    heading: 0,        // compass deg, 0 = north
+    look: 0,           // vertical look deg, 0 = horizon, + = up
+    eye: 1.8,          // eye height above ground (m)
+    walkSpeed: 2.4,    // m/s
+    flySpeed: 22,      // m/s
+    keys: new Set(),
+    lastT: 0
+  };
+  const canvas = map.getCanvas();
+  const fpBtn = document.getElementById('fp-btn');
+  const fpModeBtn = document.getElementById('fp-mode');
+  const HANDLERS = ['dragPan', 'dragRotate', 'scrollZoom', 'keyboard', 'doubleClickZoom', 'touchZoomRotate', 'touchPitch'];
+
+  function groundAt(lng, lat) {
+    const e = map.queryTerrainElevation && map.queryTerrainElevation([lng, lat]);
+    return e == null ? 0 : e;
+  }
+
+  function fpEnter(lng, lat, heading, look, mode) {
+    const c = map.getCenter();
+    fp.lng = lng ?? c.lng;
+    fp.lat = lat ?? c.lat;
+    fp.heading = heading ?? map.getBearing();
+    fp.look = look ?? 0;
+    fp.mode = mode ?? 'walk';
+    fp.alt = groundAt(fp.lng, fp.lat) + fp.eye;
+    fp.on = true;
+    fp.lastT = performance.now();
+    map.setCenterClampedToGround(false);   // required for eye-level camera over terrain
+    map.setVerticalFieldOfView(60);        // wider FOV feels right at street level
+    HANDLERS.forEach(h => map[h] && map[h].disable());
+    canvas.requestPointerLock && canvas.requestPointerLock();
+    fpBtn.textContent = '✕ Exit first person (Esc)';
+    fpModeBtn.style.display = '';
+    setMode(fp.mode);
+    document.getElementById('fp-help').style.display = 'block';
+    document.getElementById('orbit-help').style.display = 'none';
+    document.getElementById('crosshair').style.display = 'block';
+    requestAnimationFrame(fpFrame);
+  }
+
+  function fpExit() {
+    fp.on = false;
+    map.setCenterClampedToGround(true);
+    map.setVerticalFieldOfView(36.87);     // MapLibre default
+    HANDLERS.forEach(h => map[h] && map[h].enable());
+    document.exitPointerLock && document.exitPointerLock();
+    fpBtn.textContent = '▶ Walk around here (F)';
+    fpModeBtn.style.display = 'none';
+    document.getElementById('fp-help').style.display = 'none';
+    document.getElementById('orbit-help').style.display = '';
+    document.getElementById('crosshair').style.display = 'none';
+    // settle into a sane orbit view of where you ended up
+    map.jumpTo({ center: [fp.lng, fp.lat], zoom: 16.5, pitch: 60, bearing: fp.heading });
+  }
+
+  function setMode(m) {
+    fp.mode = m;
+    fpModeBtn.textContent = 'mode: ' + m + ' (T)';
+  }
+
+  function fpFrame(t) {
+    if (!fp.on) return;
+    const dt = Math.min((t - fp.lastT) / 1000, 0.1);
+    fp.lastT = t;
+
+    const sprint = fp.keys.has('shift') ? (fp.mode === 'fly' ? 4 : 3) : 1;
+    const spd = (fp.mode === 'fly' ? fp.flySpeed : fp.walkSpeed) * sprint;
+
+    let fwd = (fp.keys.has('w') ? 1 : 0) - (fp.keys.has('s') ? 1 : 0);
+    let strafe = (fp.keys.has('d') ? 1 : 0) - (fp.keys.has('a') ? 1 : 0);
+    fwd += touchStick.y;
+    strafe += touchStick.x;
+    fwd = Math.max(-1, Math.min(1, fwd));
+    strafe = Math.max(-1, Math.min(1, strafe));
+
+    let vert = 0;
+    if (fp.mode === 'fly') {
+      vert = ((fp.keys.has(' ') ? 1 : 0) - (fp.keys.has('c') ? 1 : 0)) * spd * dt;
+      // W/S also climb/descend along the look direction
+      vert += fwd * Math.sin(fp.look * Math.PI / 180) * spd * dt;
+    }
+    const horizScale = fp.mode === 'fly' ? Math.cos(fp.look * Math.PI / 180) : 1;
+
+    const rad = fp.heading * Math.PI / 180;
+    const dEast = (fwd * Math.sin(rad) + strafe * Math.cos(rad)) * spd * dt * horizScale;
+    const dNorth = (fwd * Math.cos(rad) - strafe * Math.sin(rad)) * spd * dt * horizScale;
+
+    fp.lat += dNorth / 111320;
+    fp.lng += dEast / (111320 * Math.cos(fp.lat * Math.PI / 180));
+
+    const ground = groundAt(fp.lng, fp.lat);
+    if (fp.mode === 'walk') {
+      // smooth toward terrain so stairs/slopes don't jitter
+      const target = ground + fp.eye;
+      fp.alt += (target - fp.alt) * Math.min(1, dt * 8);
+    } else {
+      fp.alt = Math.max(ground + 1.0, fp.alt + vert);
+    }
+
+    // aim at a point 300 m ahead along the view ray; MapLibre derives the camera
+    const lookRad = fp.look * Math.PI / 180;
+    const hdgRad = fp.heading * Math.PI / 180;
+    const D = 300;
+    const tLat = fp.lat + (Math.cos(hdgRad) * Math.cos(lookRad) * D) / 111320;
+    const tLng = fp.lng + (Math.sin(hdgRad) * Math.cos(lookRad) * D) / (111320 * Math.cos(fp.lat * Math.PI / 180));
+    const camOpts = map.calculateCameraOptionsFromTo(
+      [fp.lng, fp.lat], fp.alt, [tLng, tLat], fp.alt + Math.sin(lookRad) * D
+    );
+    map.jumpTo(camOpts);
+    requestAnimationFrame(fpFrame);
+  }
+
+  // ---- desktop input ----
+  fpBtn.addEventListener('click', () => fp.on ? fpExit() : fpEnter());
+  fpModeBtn.addEventListener('click', () => setMode(fp.mode === 'walk' ? 'fly' : 'walk'));
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'f' || e.key === 'F') { fp.on ? fpExit() : fpEnter(); return; }
+    if (!fp.on) return;
+    if (e.key === 't' || e.key === 'T') { setMode(fp.mode === 'walk' ? 'fly' : 'walk'); return; }
+    if (e.key === 'Escape') { fpExit(); return; }
+    fp.keys.add(e.key === ' ' ? ' ' : e.key.toLowerCase());
+    if (e.key === ' ') e.preventDefault();
+  });
+  document.addEventListener('keyup', e => {
+    fp.keys.delete(e.key === ' ' ? ' ' : e.key.toLowerCase());
+    if (e.key === 'Shift') fp.keys.delete('shift');
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!fp.on || document.pointerLockElement !== canvas) return;
+    fp.heading = (fp.heading + e.movementX * 0.14 + 360) % 360;
+    fp.look = Math.max(-70, Math.min(13, fp.look - e.movementY * 0.1));
+  });
+  // clicking back into the canvas re-grabs the mouse
+  canvas.addEventListener('click', () => {
+    if (fp.on && document.pointerLockElement !== canvas) {
+      canvas.requestPointerLock && canvas.requestPointerLock();
+    }
+  });
+
+  // ---- touch input: left half = move stick, right half = look ----
+  const touchStick = { x: 0, y: 0 };
+  const touches = {}; // id -> {x0, y0, x, y, side}
+  canvas.addEventListener('touchstart', e => {
+    if (!fp.on) return;
+    for (const t of e.changedTouches) {
+      touches[t.identifier] = {
+        x0: t.clientX, y0: t.clientY, x: t.clientX, y: t.clientY,
+        side: t.clientX < innerWidth / 2 ? 'move' : 'look'
+      };
+    }
+    e.preventDefault();
+  }, { passive: false });
+  canvas.addEventListener('touchmove', e => {
+    if (!fp.on) return;
+    for (const t of e.changedTouches) {
+      const rec = touches[t.identifier];
+      if (!rec) continue;
+      if (rec.side === 'move') {
+        touchStick.x = Math.max(-1, Math.min(1, (t.clientX - rec.x0) / 60));
+        touchStick.y = Math.max(-1, Math.min(1, -(t.clientY - rec.y0) / 60));
+      } else {
+        fp.heading = (fp.heading + (t.clientX - rec.x) * 0.4 + 360) % 360;
+        fp.look = Math.max(-70, Math.min(13, fp.look - (t.clientY - rec.y) * 0.25));
+      }
+      rec.x = t.clientX; rec.y = t.clientY;
+    }
+    e.preventDefault();
+  }, { passive: false });
+  const endTouch = e => {
+    if (!fp.on) return;
+    for (const t of e.changedTouches) {
+      const rec = touches[t.identifier];
+      if (rec && rec.side === 'move') { touchStick.x = 0; touchStick.y = 0; }
+      delete touches[t.identifier];
+    }
+  };
+  canvas.addEventListener('touchend', endTouch);
+  canvas.addEventListener('touchcancel', endTouch);
+
+  // debug/test hooks (used by the headless screenshot harness)
+  window.__fpEnter = fpEnter;
+  window.__fpExit = fpExit;
+  window.__fp = fp;
 </script>
 </body>
 </html>
