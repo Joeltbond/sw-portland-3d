@@ -31,11 +31,43 @@
       background: rgba(255,255,255,.7); box-shadow: 0 0 4px rgba(0,0,0,.6);
       pointer-events: none;
     }
+    /* persistent zone chip (current neighborhood) + transient arrival toast */
+    #zone-chip {
+      display: none; position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+      z-index: 3; padding: 5px 15px; border-radius: 14px;
+      background: rgba(15,18,22,.5); color: #e4ecf2;
+      font: 600 12px/1.2 -apple-system, system-ui, sans-serif; letter-spacing: .12em;
+      text-transform: uppercase; border: 1px solid rgba(255,255,255,.14);
+      -webkit-backdrop-filter: blur(7px); backdrop-filter: blur(7px);
+      pointer-events: none; white-space: nowrap;
+    }
+    #zone-toast {
+      display: none; position: absolute; top: 33%; left: 50%; transform: translateX(-50%);
+      z-index: 3; text-align: center; pointer-events: none;
+      text-shadow: 0 2px 16px rgba(0,0,0,.75);
+    }
+    #zone-toast .lead {
+      color: #b6c0c8; font: 600 12px/1 -apple-system, system-ui, sans-serif;
+      letter-spacing: .42em; text-transform: uppercase;
+    }
+    #zone-toast .name {
+      color: #fff; font: 200 46px/1.1 -apple-system, system-ui, sans-serif;
+      letter-spacing: .01em; margin-top: 10px;
+    }
+    #zone-toast.show { animation: zonepop 3.6s ease forwards; }
+    @keyframes zonepop {
+      0%   { opacity: 0; transform: translateX(-50%) translateY(12px); }
+      12%  { opacity: 1; transform: translateX(-50%) translateY(0); }
+      80%  { opacity: 1; transform: translateX(-50%) translateY(0); }
+      100% { opacity: 0; transform: translateX(-50%) translateY(-7px); }
+    }
   </style>
 </head>
 <body>
 <div id="map"></div>
 <div id="crosshair"></div>
+<div id="zone-chip"></div>
+<div id="zone-toast"><div class="lead">Now entering</div><div class="name"></div></div>
 <div id="hud">
   <b>Southwest Portland</b><br/>
   <span id="orbit-help">Map view — drag to pan · right-drag to tilt · scroll to zoom.<br/></span>
@@ -138,6 +170,7 @@
         // Fast-travel without leaving first person: drop onto the new spot.
         fp.lng = lng; fp.lat = lat; fp.heading = bearing; fp.look = -3;
         fp.alt = groundAt(lng, lat) + fp.eye;
+        updateZone(true);
       } else {
         map.flyTo({ center: [lng, lat], zoom, pitch, bearing, duration: 2500 });
       }
@@ -148,6 +181,7 @@
   const fp = {
     on: false, mode: 'walk',
     lng: 0, lat: 0, alt: 0,
+    region: null,      // current neighborhood name (for the zone toast/chip)
     heading: 0,        // compass deg, 0 = north
     look: 0,           // vertical look deg, 0 = horizon, + = up
     eye: 1.8,          // eye height above ground (m)
@@ -164,6 +198,54 @@
   function groundAt(lng, lat) {
     const e = map.queryTerrainElevation && map.queryTerrainElevation([lng, lat]);
     return e == null ? 0 : e;
+  }
+
+  // ---- SW Portland neighborhoods (hand-placed centroids) ----
+  // Nearest-centroid wins; beyond the cutoff you're just "Southwest Portland".
+  const NEIGHBORHOODS = [
+    { name: 'Council Crest',        lng: -122.7076, lat: 45.4983 },
+    { name: 'Marquam Hill',         lng: -122.6975, lat: 45.4995 },  // OHSU
+    { name: 'Marquam Nature Park',  lng: -122.6935, lat: 45.4880 },
+    { name: 'Healy Heights',        lng: -122.7165, lat: 45.4890 },
+    { name: 'Hillside',             lng: -122.7005, lat: 45.5120 },
+    { name: 'Hillsdale',            lng: -122.7095, lat: 45.4737 },
+    { name: 'Bridlemile',           lng: -122.7330, lat: 45.4900 },
+    { name: 'Homestead',            lng: -122.6885, lat: 45.4955 },
+    { name: 'Burlingame',           lng: -122.6960, lat: 45.4675 },
+    { name: 'Multnomah Village',    lng: -122.7126, lat: 45.4530 },
+    { name: 'South Burlingame',     lng: -122.6885, lat: 45.4590 },
+  ];
+  function regionAt(lng, lat) {
+    let best = null, bd = Infinity;
+    const cosL = Math.cos(lat * Math.PI / 180);
+    for (const n of NEIGHBORHOODS) {
+      const dx = (lng - n.lng) * cosL, dy = lat - n.lat;
+      const d = dx * dx + dy * dy;
+      if (d < bd) { bd = d; best = n; }
+    }
+    return Math.sqrt(bd) < 0.020 ? best.name : 'Southwest Portland';  // ~2.2 km cutoff
+  }
+
+  const zoneChip = document.getElementById('zone-chip');
+  const zoneToast = document.getElementById('zone-toast');
+  zoneToast.addEventListener('animationend', () => {
+    zoneToast.classList.remove('show'); zoneToast.style.display = 'none';
+  });
+  // Re-evaluate the current neighborhood; pop a toast + update the chip on change.
+  function updateZone(force) {
+    const z = regionAt(fp.lng, fp.lat);
+    if (z === fp.region && !force) return;
+    fp.region = z;
+    zoneChip.textContent = '◈ ' + z;
+    zoneChip.style.display = fp.on ? 'block' : 'none';
+    if (fp.on) showToast(z);
+  }
+  function showToast(name) {
+    zoneToast.querySelector('.name').textContent = name;
+    zoneToast.style.display = 'block';
+    zoneToast.classList.remove('show');
+    void zoneToast.offsetWidth;        // restart the animation
+    zoneToast.classList.add('show');
   }
 
   function fpEnter(lng, lat, heading, look, mode) {
@@ -188,6 +270,7 @@
     document.getElementById('fp-help').style.display = 'block';
     document.getElementById('orbit-help').style.display = 'none';
     document.getElementById('crosshair').style.display = 'block';
+    fp.region = null; updateZone(true);    // announce where you spawned
     requestAnimationFrame(fpFrame);
   }
 
@@ -202,6 +285,7 @@
     document.getElementById('fp-help').style.display = 'none';
     document.getElementById('orbit-help').style.display = '';
     document.getElementById('crosshair').style.display = 'none';
+    zoneChip.style.display = 'none';
     // settle into a sane orbit view of where you ended up
     map.jumpTo({ center: [fp.lng, fp.lat], zoom: 16.5, pitch: 60, bearing: fp.heading });
   }
@@ -260,6 +344,7 @@
       [fp.lng, fp.lat], fp.alt, [tLng, tLat], fp.alt + Math.sin(lookRad) * D
     );
     map.jumpTo(camOpts);
+    updateZone(false);   // pop a toast when we cross into a new neighborhood
     requestAnimationFrame(fpFrame);
   }
 
@@ -336,6 +421,7 @@
   window.__fpEnter = fpEnter;
   window.__fpExit = fpExit;
   window.__fp = fp;
+  window.__forceZone = () => updateZone(true);   // re-trigger toast/chip (for screenshots)
 </script>
 </body>
 </html>

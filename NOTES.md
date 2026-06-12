@@ -20,6 +20,18 @@ on crossing into Hillsdale / Multnomah Village / Marquam Nature Park, compass, s
 labels/POI fade at street level. The world should read as PLACE, not as map.
 
 ## Iteration log
+- **#3 (15:36–15:43)** Neighborhood zone HUD — the "this is a game" win. Hand-placed
+  11 SW Portland centroids (Council Crest, Marquam Hill/OHSU, Marquam Nature Park, Healy
+  Heights, Hillside, Hillsdale, Bridlemile, Homestead, Burlingame, Multnomah Village,
+  South Burlingame). `regionAt()` = nearest-centroid-wins with a ~2.2 km cutoff (falls
+  back to "Southwest Portland"). Two HUD pieces: a persistent top-center **zone chip**
+  ("◈ MULTNOMAH VILLAGE") and a big **arrival toast** ("Now entering Multnomah Village")
+  that pops + fades over 3.6 s on every zone crossing. Wired into fpEnter (spawn announce),
+  fast-travel clicks, and per-frame in fpFrame (pops when you walk across a border).
+  Gotcha: the toast fades before the harness's post-tile screenshot, so added a
+  `window.__forceZone()` hook + a `-toast.png` capture per view (re-pops the toast on the
+  fully-rendered scene). Verified: village→"Multnomah Village", OHSU→"Marquam Hill" both
+  render crisp; eye heights unchanged (village 215.14 / ground 213.34).
 - **#2 (15:26–15:35)** Boot straight into first person. Page now auto-enters FP on
   the Council Crest summit (Portland's high point) the moment the terrain DEM reports
   real elevation there (poll groundAt > 50 m, ~330 m summit); orbit/map is demoted to
@@ -45,24 +57,23 @@ labels/POI fade at street level. The world should read as PLACE, not as map.
   FOV 60° in FP, 36.87° (default) in orbit. Test hooks: `__fpEnter/__fpExit/__fp`.
 
 ## Next ideas (game-feel priority order)
-1. **Neighborhood toast HUD** — detect when the player crosses into Hillsdale /
-   Multnomah Village / Marquam Nature Park / Council Crest / OHSU etc. (point-in-polygon
-   against a small hand-drawn bbox/centroid list, or OSM place labels) and pop a
-   game-style "Entering Multnomah Village" toast. Cheapest big "this is a game" win.
-2. **Game-feel movement** — gravity + jump (Space in walk), acceleration/momentum
+1. **Atmosphere** — real sun position + sky gradient + distance fog tuned to SW Portland's
+   forested hills; draw-distance haze so far ridges recede. Sky is a flat pale wash now —
+   the single most "map, not game" thing left in the renders. High screenshot payoff.
+2. **Labels fade at street level** — POI/road/place symbol text should fade out as the FP
+   camera drops to eye level (opacity ramp on pitch/zoom) so the world reads as place, not
+   map. Bonus: kills the `_mult` symbol-render spam. (Note: zone chip now carries the
+   "where am I" load, so map labels are safe to drop in FP.)
+3. **Game-feel movement** — gravity + jump (Space in walk), acceleration/momentum
    instead of instant velocity, subtle head bob while walking. Currently movement is
    instant-on/off and dead-flat — reads robotic.
-3. **Labels fade at street level** — POI/road/place symbol text should fade out as the
-   FP camera drops to eye level (opacity ramp on zoom/pitch) so the world reads as place,
-   not map. Bonus: kills the `_mult` symbol-render spam.
-4. **Atmosphere** — real sun position + sky gradient + distance fog tuned to SW Portland's
-   forested hills; draw-distance haze so far ridges recede. Sky is currently a flat pale wash.
-5. **Ground texture at eye level** — the liberty style is a featureless beige wash at
+4. **Ground texture at eye level** — the liberty style is a featureless beige wash at
    street level (see barren village/fly shots). Drape Esri World Imagery raster under the
    buildings in FP, OR lean into a stylized game look (textured ground material, grid).
-6. **Trees / forest** — SW Portland is forest-heavy (Marquam, Tryon Creek, Council Crest).
+5. **Trees / forest** — SW Portland is forest-heavy (Marquam, Tryon Creek, Council Crest).
    OSM park/landcover polygons → extruded canopy blobs or billboarded trees.
-7. **Compass + speed readout HUD** — heading ribbon at top, speed number in fly mode.
-8. **FP collision with buildings** — queryRenderedFeatures ahead before moving so you
+6. **Compass + speed readout HUD** — heading ribbon at top, speed number in fly mode.
+   (Pairs naturally with the new zone chip — same top strip.)
+7. **FP collision with buildings** — queryRenderedFeatures ahead before moving so you
    can't walk through walls (physicality = game-feel).
-9. Mobile: visible joystick widget, fullscreen button, deviceorientation look.
+8. Mobile: visible joystick widget, fullscreen button, deviceorientation look.

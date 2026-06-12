@@ -43,6 +43,12 @@ const VIEWS = [
     }));
     console.log(file, JSON.stringify(state));
     await page.screenshot({ path: OUT + file });
+
+    // Re-pop the zone toast on this fully-rendered scene and grab it (the toast
+    // fades after ~3.6s, so it's gone by the normal screenshot above).
+    await page.evaluate(() => window.__forceZone && window.__forceZone());
+    await new Promise(r => setTimeout(r, 600));
+    await page.screenshot({ path: OUT + file.replace('.png', '-toast.png') });
   }
   await browser.close();
 })().catch(e => { console.error(e.message); process.exit(1); });
