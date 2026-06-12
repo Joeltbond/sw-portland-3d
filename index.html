@@ -37,16 +37,16 @@
 <div id="map"></div>
 <div id="crosshair"></div>
 <div id="hud">
-  <b>Southwest Portland — 3D</b><br/>
-  <span id="orbit-help">Drag to pan · right-drag (or two fingers) to tilt/rotate · scroll to zoom.<br/></span>
-  Fly to:
+  <b>Southwest Portland</b><br/>
+  <span id="orbit-help">Map view — drag to pan · right-drag to tilt · scroll to zoom.<br/></span>
+  Travel to:
   <span class="spot" data-v="-122.6995,45.4992,14.5,60,210">OHSU / Marquam Hill</span> ·
   <span class="spot" data-v="-122.7076,45.4983,14,55,150">Council Crest</span> ·
   <span class="spot" data-v="-122.7095,45.4737,15,55,0">Hillsdale</span> ·
   <span class="spot" data-v="-122.7126,45.4530,15.5,55,30">Multnomah Village</span> ·
   <span class="spot" data-v="-122.6789,45.5085,15,60,330">Downtown south</span>
   <div id="fp-bar">
-    <button id="fp-btn" disabled>▶ Walk around here (F)</button>
+    <button id="fp-btn" disabled>▶ Enter first person (F)</button>
     <button id="fp-mode" style="display:none">mode: walk (T)</button>
   </div>
   <div id="fp-help">
@@ -68,8 +68,8 @@
     antialias: true
   });
 
-  map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }));
-  map.addControl(new maplibregl.ScaleControl());
+  // No map chrome (zoom buttons, scale bar) — this is a game, not a map.
+  // The default AttributionControl stays (OSM/terrain license requirement).
 
   map.on('load', () => {
     // Real elevation: AWS Terrain Tiles (terrarium encoding, no key needed).
@@ -108,13 +108,39 @@
     }, firstSymbol);
 
     document.getElementById('fp-btn').disabled = false;
+
+    // Boot straight into first person — the world should read as place, not map.
+    // Start on the Council Crest summit (Portland's high point, ~330 m) looking
+    // northeast out over the city, then let the player walk/fly from there.
+    bootFirstPerson();
   });
+
+  // Wait for the terrain DEM to actually report elevation at the start point
+  // (queryTerrainElevation returns 0/null until the tile streams in), then enter FP.
+  function bootFirstPerson() {
+    const startLng = -122.7076, startLat = 45.4983;   // Council Crest summit
+    let tries = 0;
+    (function wait() {
+      if (fp.on) return;                               // user already jumped in
+      const g = groundAt(startLng, startLat);
+      if (g > 50 || tries++ > 40) {                    // real summit elevation arrived
+        fpEnter(startLng, startLat, 55, -3, 'walk');
+      } else {
+        setTimeout(wait, 150);
+      }
+    })();
+  }
 
   document.querySelectorAll('.spot').forEach(el => {
     el.addEventListener('click', () => {
-      if (fp.on) fpExit();
       const [lng, lat, zoom, pitch, bearing] = el.dataset.v.split(',').map(Number);
-      map.flyTo({ center: [lng, lat], zoom, pitch, bearing, duration: 2500 });
+      if (fp.on) {
+        // Fast-travel without leaving first person: drop onto the new spot.
+        fp.lng = lng; fp.lat = lat; fp.heading = bearing; fp.look = -3;
+        fp.alt = groundAt(lng, lat) + fp.eye;
+      } else {
+        map.flyTo({ center: [lng, lat], zoom, pitch, bearing, duration: 2500 });
+      }
     });
   });
 
@@ -153,8 +179,10 @@
     map.setCenterClampedToGround(false);   // required for eye-level camera over terrain
     map.setVerticalFieldOfView(60);        // wider FOV feels right at street level
     HANDLERS.forEach(h => map[h] && map[h].disable());
-    canvas.requestPointerLock && canvas.requestPointerLock();
-    fpBtn.textContent = '✕ Exit first person (Esc)';
+    // Pointer lock needs a user gesture; on autoboot it'll throw/reject — ignore it
+    // (the canvas-click handler re-grabs the mouse on first click).
+    try { const p = canvas.requestPointerLock && canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+    fpBtn.textContent = '✕ Exit to map (Esc)';
     fpModeBtn.style.display = '';
     setMode(fp.mode);
     document.getElementById('fp-help').style.display = 'block';
@@ -169,7 +197,7 @@
     map.setVerticalFieldOfView(36.87);     // MapLibre default
     HANDLERS.forEach(h => map[h] && map[h].enable());
     document.exitPointerLock && document.exitPointerLock();
-    fpBtn.textContent = '▶ Walk around here (F)';
+    fpBtn.textContent = '▶ Enter first person (F)';
     fpModeBtn.style.display = 'none';
     document.getElementById('fp-help').style.display = 'none';
     document.getElementById('orbit-help').style.display = '';

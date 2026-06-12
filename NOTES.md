@@ -12,7 +12,29 @@ Each iteration: ONE substantive change, verify headless, push (push = deploy).
 - Street-level tiles stream slowly under swiftshader; the 45s tile wait may time out —
   that's the test env, not the page.
 
+## Direction (2026-06-12 14:43) — this is a GAME, not a map
+Every iteration pushes toward "walking/flying around SW Portland in a game": boot
+into first person, strip map chrome, game-feel movement (gravity/jump/momentum/head
+bob/collision), atmosphere (fog/sun/sky/draw distance), game HUD (neighborhood-toast
+on crossing into Hillsdale / Multnomah Village / Marquam Nature Park, compass, speed),
+labels/POI fade at street level. The world should read as PLACE, not as map.
+
 ## Iteration log
+- **#2 (15:26–15:35)** Boot straight into first person. Page now auto-enters FP on
+  the Council Crest summit (Portland's high point) the moment the terrain DEM reports
+  real elevation there (poll groundAt > 50 m, ~330 m summit); orbit/map is demoted to
+  an Esc escape hatch. Stripped map chrome: removed NavigationControl (zoom/compass
+  buttons) + ScaleControl; kept the default AttributionControl (OSM/terrain license).
+  "Travel to" landmark links now fast-travel WITHIN first person (set fp.lng/lat/heading,
+  recompute alt) instead of dumping you back to orbit. HUD reframed (Exit to map / Enter
+  first person). Gotchas: (a) requestPointerLock THROWS without a user gesture — autoboot
+  must wrap it in try/catch + swallow the promise rejection or fpEnter aborts mid-setup;
+  (b) booting to street level means the harness's old `map.loaded()/areTilesLoaded()`
+  initial-wait never settles under swiftshader — gate on `map.isStyleLoaded()` instead
+  (per-view tile waits still apply). Verified: eye height holds (village alt 215.14 vs
+  ground 213.34 = 1.8 exactly). Known noise: MapLibre spams `_mult`/icon-bucket symbol
+  errors at the FP camera — harmless (geometry renders), will go away once labels fade
+  at street level.
 - **#1 (14:08–14:25)** First-person walk/fly mode. MapLibre upgraded 4.7.1 → 5.6.1
   (v4 hard-caps pitch at 85°; v5 allows >90 and has `calculateCameraOptionsFromTo`,
   `setCenterClampedToGround`, `setVerticalFieldOfView` — there is NO Mapbox-style
@@ -22,17 +44,25 @@ Each iteration: ONE substantive change, verify headless, push (push = deploy).
   Shift sprint + T walk/fly + Esc exit; touch: left half = move stick, right half = look.
   FOV 60° in FP, 36.87° (default) in orbit. Test hooks: `__fpEnter/__fpExit/__fp`.
 
-## Next ideas (priority order)
-1. **Satellite ground texture** — at street level the liberty style is a featureless
-   beige wash (see fp-walk-village shot). Drape Esri World Imagery raster
-   (`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}`,
-   free, attribution required) under the 3D buildings, maybe as a toggle or auto-on in FP.
-   Biggest realism win available.
-2. **Hillshade layer** from the same terrain DEM — ground relief shading in orbit view.
-3. **Trees** — SW Portland is forest-heavy (Marquam Nature Park, Tryon Creek, Council
-   Crest). OSM `landcover`/`park` polygons → darker green + maybe extruded canopy blobs.
-4. Building realism: color variety keyed to height/area, slight roof color shift.
-5. FP collision with buildings (queryRenderedFeatures ahead before moving).
-6. Mobile polish: visible joystick widget, fullscreen button, maybe deviceorientation look.
-7. Fog/sky tuning per time of day.
-8. Perf: skip `jumpTo` on frames with no input.
+## Next ideas (game-feel priority order)
+1. **Neighborhood toast HUD** — detect when the player crosses into Hillsdale /
+   Multnomah Village / Marquam Nature Park / Council Crest / OHSU etc. (point-in-polygon
+   against a small hand-drawn bbox/centroid list, or OSM place labels) and pop a
+   game-style "Entering Multnomah Village" toast. Cheapest big "this is a game" win.
+2. **Game-feel movement** — gravity + jump (Space in walk), acceleration/momentum
+   instead of instant velocity, subtle head bob while walking. Currently movement is
+   instant-on/off and dead-flat — reads robotic.
+3. **Labels fade at street level** — POI/road/place symbol text should fade out as the
+   FP camera drops to eye level (opacity ramp on zoom/pitch) so the world reads as place,
+   not map. Bonus: kills the `_mult` symbol-render spam.
+4. **Atmosphere** — real sun position + sky gradient + distance fog tuned to SW Portland's
+   forested hills; draw-distance haze so far ridges recede. Sky is currently a flat pale wash.
+5. **Ground texture at eye level** — the liberty style is a featureless beige wash at
+   street level (see barren village/fly shots). Drape Esri World Imagery raster under the
+   buildings in FP, OR lean into a stylized game look (textured ground material, grid).
+6. **Trees / forest** — SW Portland is forest-heavy (Marquam, Tryon Creek, Council Crest).
+   OSM park/landcover polygons → extruded canopy blobs or billboarded trees.
+7. **Compass + speed readout HUD** — heading ribbon at top, speed number in fly mode.
+8. **FP collision with buildings** — queryRenderedFeatures ahead before moving so you
+   can't walk through walls (physicality = game-feel).
+9. Mobile: visible joystick widget, fullscreen button, deviceorientation look.
