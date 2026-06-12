@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>SW Portland — 3D</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+  <style>
+    html, body { margin: 0; height: 100%; }
+    #map { height: 100%; }
+    #hud {
+      position: absolute; top: 10px; left: 10px; z-index: 2;
+      background: rgba(20,20,20,.75); color: #eee; padding: 8px 12px;
+      font: 13px/1.5 -apple-system, system-ui, sans-serif; border-radius: 6px;
+      max-width: 280px;
+    }
+    #hud b { color: #fff; }
+    .spot { cursor: pointer; color: #8cf; }
+    .spot:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+<div id="hud">
+  <b>Southwest Portland — 3D</b><br/>
+  Drag to pan · right-drag (or two fingers) to tilt/rotate · scroll to zoom.<br/>
+  Fly to:
+  <span class="spot" data-v="-122.6995,45.4992,14.5,60,210">OHSU / Marquam Hill</span> ·
+  <span class="spot" data-v="-122.7076,45.4983,14,55,150">Council Crest</span> ·
+  <span class="spot" data-v="-122.7095,45.4737,15,55,0">Hillsdale</span> ·
+  <span class="spot" data-v="-122.7126,45.4530,15.5,55,30">Multnomah Village</span> ·
+  <span class="spot" data-v="-122.6789,45.5085,15,60,330">Downtown south</span>
+</div>
+<script>
+  const map = new maplibregl.Map({
+    container: 'map',
+    style: 'https://tiles.openfreemap.org/styles/liberty', // keyless OSM vector tiles
+    center: [-122.700, 45.487],   // heart of SW Portland
+    zoom: 13.4,
+    pitch: 62,
+    bearing: 205,                 // looking southwest into the hills
+    hash: true,                   // camera state in the URL — shareable views
+    maxPitch: 75,
+    antialias: true
+  });
+
+  map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }));
+  map.addControl(new maplibregl.ScaleControl());
+
+  map.on('load', () => {
+    // Real elevation: AWS Terrain Tiles (terrarium encoding, no key needed).
+    map.addSource('terrain', {
+      type: 'raster-dem',
+      tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+      encoding: 'terrarium',
+      tileSize: 256,
+      maxzoom: 14,
+      attribution: 'Terrain: Mapzen/AWS'
+    });
+    map.setTerrain({ source: 'terrain', exaggeration: 1.35 });
+
+    map.setSky && map.setSky({
+      'sky-color': '#a8c8e0',
+      'horizon-color': '#e8e0d8',
+      'fog-color': '#dcdcdc',
+      'sky-horizon-blend': 0.6
+    });
+
+    // Extrude buildings from the OpenMapTiles 'building' layer.
+    const layers = map.getStyle().layers;
+    const firstSymbol = layers.find(l => l.type === 'symbol')?.id;
+    map.addLayer({
+      id: '3d-buildings',
+      source: 'openmaptiles',
+      'source-layer': 'building',
+      type: 'fill-extrusion',
+      minzoom: 13,
+      paint: {
+        'fill-extrusion-color': '#c9b8a8',
+        'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 8],
+        'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
+        'fill-extrusion-opacity': 0.85
+      }
+    }, firstSymbol);
+  });
+
+  document.querySelectorAll('.spot').forEach(el => {
+    el.addEventListener('click', () => {
+      const [lng, lat, zoom, pitch, bearing] = el.dataset.v.split(',').map(Number);
+      map.flyTo({ center: [lng, lat], zoom, pitch, bearing, duration: 2500 });
+    });
+  });
+</script>
+</body>
+</html>
