@@ -20,6 +20,20 @@ on crossing into Hillsdale / Multnomah Village / Marquam Nature Park, compass, s
 labels/POI fade at street level. The world should read as PLACE, not as map.
 
 ## Iteration log
+- **#4 (15:43–15:52)** Atmosphere + lighting — the biggest "map→game" jump in the
+  renders. Retuned `setSky` from a flat pale wash to a real dome: rich blue zenith
+  (`sky-color #2f6cb3`) falling through `sky-horizon-blend 0.75` to a warm golden
+  haze band (`horizon-color #e6d2ac`), then `horizon-fog-blend`/`fog-color #ddd0bb`/
+  `fog-ground-blend 0.2` so distant ridges dissolve into warm haze while the
+  foreground stays clear. Added `setLight({anchor:'map', position:[1.5,235,50],
+  color:#ffe9c6, intensity:0.6})` — a low warm SW sun fixed to the WORLD (not the
+  viewport), so building faces now shade by their real orientation: lit gold fronts,
+  shadowed sides → the boxes finally have form. Gotchas: MapLibre v5 sky is a gradient
+  atmosphere with NO sun-disc API (don't look for `sky-atmosphere-sun`); the warm
+  horizon + light is how you imply a sun. `anchor:'map'` is the key flip — default
+  light is viewport-anchored so lit faces always chase the camera (reads flat/fake);
+  map-anchored makes shading sun-like. Verified: council-fly + ohsu-walk both render
+  the gradient + gold-lit buildings, eye heights unchanged, toast/chip intact.
 - **#3 (15:36–15:43)** Neighborhood zone HUD — the "this is a game" win. Hand-placed
   11 SW Portland centroids (Council Crest, Marquam Hill/OHSU, Marquam Nature Park, Healy
   Heights, Hillside, Hillsdale, Bridlemile, Homestead, Burlingame, Multnomah Village,
@@ -57,23 +71,20 @@ labels/POI fade at street level. The world should read as PLACE, not as map.
   FOV 60° in FP, 36.87° (default) in orbit. Test hooks: `__fpEnter/__fpExit/__fp`.
 
 ## Next ideas (game-feel priority order)
-1. **Atmosphere** — real sun position + sky gradient + distance fog tuned to SW Portland's
-   forested hills; draw-distance haze so far ridges recede. Sky is a flat pale wash now —
-   the single most "map, not game" thing left in the renders. High screenshot payoff.
-2. **Labels fade at street level** — POI/road/place symbol text should fade out as the FP
+1. **Labels fade at street level** — POI/road/place symbol text should fade out as the FP
    camera drops to eye level (opacity ramp on pitch/zoom) so the world reads as place, not
    map. Bonus: kills the `_mult` symbol-render spam. (Note: zone chip now carries the
    "where am I" load, so map labels are safe to drop in FP.)
-3. **Game-feel movement** — gravity + jump (Space in walk), acceleration/momentum
+2. **Game-feel movement** — gravity + jump (Space in walk), acceleration/momentum
    instead of instant velocity, subtle head bob while walking. Currently movement is
    instant-on/off and dead-flat — reads robotic.
-4. **Ground texture at eye level** — the liberty style is a featureless beige wash at
+3. **Ground texture at eye level** — the liberty style is a featureless beige wash at
    street level (see barren village/fly shots). Drape Esri World Imagery raster under the
    buildings in FP, OR lean into a stylized game look (textured ground material, grid).
-5. **Trees / forest** — SW Portland is forest-heavy (Marquam, Tryon Creek, Council Crest).
+4. **Trees / forest** — SW Portland is forest-heavy (Marquam, Tryon Creek, Council Crest).
    OSM park/landcover polygons → extruded canopy blobs or billboarded trees.
-6. **Compass + speed readout HUD** — heading ribbon at top, speed number in fly mode.
+5. **Compass + speed readout HUD** — heading ribbon at top, speed number in fly mode.
    (Pairs naturally with the new zone chip — same top strip.)
-7. **FP collision with buildings** — queryRenderedFeatures ahead before moving so you
+6. **FP collision with buildings** — queryRenderedFeatures ahead before moving so you
    can't walk through walls (physicality = game-feel).
-8. Mobile: visible joystick widget, fullscreen button, deviceorientation look.
+7. Mobile: visible joystick widget, fullscreen button, deviceorientation look.

@@ -115,11 +115,28 @@
     });
     map.setTerrain({ source: 'terrain', exaggeration: 1.35 });
 
+    // Atmosphere: late-afternoon SW Portland. Deep blue zenith falling to a warm,
+    // hazy horizon; distance fog so the far forested ridges recede instead of
+    // standing out crisp like a map. (MapLibre v5 sky is a gradient atmosphere —
+    // no sun disc API — so the sun is implied by the warm horizon + the light below.)
     map.setSky && map.setSky({
-      'sky-color': '#a8c8e0',
-      'horizon-color': '#e8e0d8',
-      'fog-color': '#dcdcdc',
-      'sky-horizon-blend': 0.6
+      'sky-color': '#2f6cb3',          // rich blue at the top of the dome
+      'sky-horizon-blend': 0.75,       // how far the blue reaches toward the horizon
+      'horizon-color': '#e6d2ac',      // warm golden haze band at the horizon
+      'horizon-fog-blend': 0.55,       // blend the horizon down into the ground fog
+      'fog-color': '#ddd0bb',          // warm haze the distant ridges dissolve into
+      'fog-ground-blend': 0.2,         // keep the foreground clear, haze the distance
+      'atmosphere-blend': 0.7
+    });
+
+    // Sun-anchored directional light so building faces shade by their real-world
+    // orientation (anchor:'map') instead of always facing the camera. Low, warm
+    // afternoon sun from the southwest gives the boxes form and a game-lit mood.
+    map.setLight && map.setLight({
+      anchor: 'map',
+      position: [1.5, 235, 50],        // [radius, azimuth° (SW), polar° from vertical]
+      color: '#ffe9c6',                // warm sunlight
+      intensity: 0.6
     });
 
     // Extrude buildings from the OpenMapTiles 'building' layer.
