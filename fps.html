@@ -113,6 +113,7 @@ const EYE = 1.7;                            // eye height (m)
 const PLAZA_R = 11;                          // summit viewing-plaza radius (m)
 let   PLAZA_TOP = null;                      // plaza deck world-y (set once the DEM is in)
 const TOWER = { x: 18, z: 120, h: 58 };      // broadcast lattice tower, ~120 m SSE of the summit
+const FOUNTAIN = { bearing: 38, dist: 16 };  // the "Joy" bronze fountain, just off the plaza rim (NE)
 const DEM_Z = 14, SAT_Z = 17;               // z17 imagery (~1m/px) keeps the foreground sharp
 const cosLat0 = Math.cos(LAT0 * Math.PI / 180);
 const dLng = HALF / (111320 * cosLat0);
@@ -558,7 +559,65 @@ function buildSummit() {
     drum.position.set(TOWER.x + Math.cos(ang) * 1.6, tg + TOWER.h * hy, TOWER.z + Math.sin(ang) * 1.6);
     scene.add(drum);
   }
+
+  buildFountain();
 }
+
+// The "Joy" fountain — Council Crest's bronze centerpiece (Frederic Littman, 1956): a woman
+// with her hair swept back, lifting a child in her outstretched raised arms, ~3 m tall on a
+// triangular granite base/drinking fountain (refs: portland.gov, the59club, Wikipedia
+// "Pioneer Woman (Littman)"). Built from primitives merged into one bronze mesh; sits just
+// off the plaza rim where you spawn, its front turned back toward the viewing deck.
+function buildFountain() {
+  const fb = FOUNTAIN.bearing * Math.PI / 180;
+  const fx = Math.sin(fb) * FOUNTAIN.dist, fz = -Math.cos(fb) * FOUNTAIN.dist;
+  const fy = groundAt(fx, fz);
+  const g = new THREE.Group();
+  g.position.set(fx, fy, fz);
+  g.rotation.y = Math.atan2(-fx, -fz);        // turn the figure's front toward the plaza/spawn
+
+  const granite = new THREE.MeshLambertMaterial({ color: '#8c857a' });
+  const ped = new THREE.Mesh(new THREE.CylinderGeometry(1.25, 1.5, 0.95, 3), granite);
+  ped.rotation.y = Math.PI; ped.position.y = 0.475; g.add(ped);    // triangular granite base
+  const basin = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.05, 0.4, 28), granite);
+  basin.position.y = 1.05; g.add(basin);                          // shallow fountain bowl
+  const water = new THREE.Mesh(new THREE.CircleGeometry(1.0, 28),
+    new THREE.MeshLambertMaterial({ color: '#5f86a3', transparent: true, opacity: 0.72 }));
+  water.rotateX(-Math.PI / 2); water.position.y = 1.16; g.add(water);
+  const plinth = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.5, 0.7, 12), granite);
+  plinth.position.y = 1.35; g.add(plinth);                        // the figure rises from here
+
+  // bronze figure (one merged mesh), feet at the top of the plinth
+  const P = [];
+  const sph = (r, x, y, z, sx, sy, sz) => {
+    const s = new THREE.SphereGeometry(r, 12, 10);
+    if (sx) s.scale(sx, sy, sz); s.translate(x, y, z); P.push(s);
+  };
+  P.push(strut(-0.085, 0, 0, -0.06, 0.98, 0.0, 0.085));          // legs
+  P.push(strut( 0.085, 0, 0,  0.06, 0.98, 0.0, 0.085));
+  sph(0.17, 0, 1.04, 0);                                          // hips
+  const torso = new THREE.CylinderGeometry(0.21, 0.155, 0.86, 14);
+  torso.translate(0, 1.46, 0.02); P.push(torso);                 // tapered torso
+  sph(0.1, 0, 1.86, 0.03);                                       // shoulder knot
+  P.push(strut(0, 1.86, 0.03, 0, 1.99, 0.05, 0.06));             // neck
+  sph(0.145, 0, 2.12, 0.06);                                     // head
+  sph(0.16, 0, 2.14, -0.05, 0.95, 1.25, 0.85);                   // hair swept back
+  P.push(strut(-0.18, 1.8, 0.05, -0.3, 2.24, 0.32, 0.06));       // L upper arm
+  P.push(strut(-0.3, 2.24, 0.32, -0.09, 2.56, 0.46, 0.052));     // L forearm
+  P.push(strut( 0.18, 1.8, 0.05,  0.3, 2.24, 0.32, 0.06));       // R upper arm
+  P.push(strut( 0.3, 2.24, 0.32,  0.09, 2.56, 0.46, 0.052));     // R forearm
+  sph(0.12, 0, 2.64, 0.48);                                      // child held aloft
+  sph(0.08, 0, 2.8, 0.52);
+  P.push(strut(-0.08, 2.66, 0.5, -0.16, 2.78, 0.46, 0.035));     // child's arms reaching out
+  P.push(strut( 0.08, 2.66, 0.5,  0.16, 2.78, 0.46, 0.035));
+  const figure = new THREE.Mesh(mergeGeometries(P),
+    new THREE.MeshLambertMaterial({ color: '#6f5836' }));        // warm bronze
+  figure.position.y = 1.62; g.add(figure);
+
+  scene.add(g);
+  __fountain = g;
+}
+let __fountain = null;
 
 // Seamless, tileable ground-detail grain (luminance only). Periodic value-noise (sine
 // octaves wrap exactly over the tile) plus faint vertical blade streaks → reads as grass/
@@ -977,6 +1036,7 @@ window.__fpsReady = false;
 window.__touchMode = TOUCH;                 // true on coarse-pointer devices (touch HUD shown)
 window.__treeCount = () => TREES;           // forest sanity check for the headless harness
 window.__hasSummit = () => PLAZA_TOP !== null;   // plaza/tower built
+window.__hasFountain = () => !!__fountain;       // "Joy" bronze fountain built
 // audio harness (headless can't hear — these confirm the graph wires up without throwing)
 window.__initAudio = () => { initAudio(); return window.__audioState(); };
 window.__audioState = () => audio ? { state: audio.ctx.state, sampleRate: audio.ctx.sampleRate, masterGain: audio.master.gain.value } : null;

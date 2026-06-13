@@ -54,6 +54,25 @@ hooks instead: `window.__pauseSim=true; window.__step(1/60)` in a loop, read
   hill. NOT YET DONE — do this before trees/landmarks; record refs used here.
 
 ## Iteration log
+- **#13 (19:02–19:14)** "JOY" FOUNTAIN — Council Crest's bronze centerpiece, now a real
+  landmark at the spawn plaza (backlog #3 polish). **Refs used:** WebSearch → portland.gov +
+  the59club blog + Wikipedia "Pioneer Woman (Littman)" + portlandbridges photos — confirmed
+  Frederic Littman's 1956 welded-bronze drinking fountain: a standing woman, hair swept back,
+  **lifting a child in her outstretched raised arms**, ~10 ft (3 m) on a **triangular granite
+  base**. Built `buildFountain()`: a triangular granite pedestal (`CylinderGeometry(...,3)` =
+  3-sided prism), a shallow basin bowl + a translucent water disc, a center plinth, and the
+  bronze figure as ONE merged mesh — legs/arms/neck via the existing `strut(a,b,r)` helper,
+  hips/head/child/hair as scaled spheres, a tapered-cylinder torso — `mergeGeometries` →
+  `MeshLambertMaterial #6f5836` (warm bronze). Placed just off the plaza rim at bearing 38°
+  (NE), 16 m out, so it's framed in the default spawn view; `group.rotation.y =
+  atan2(-fx,-fz)` turns the figure's front (built facing +z) back toward the viewing deck.
+  Verified headless (fps-fountain + a closer custom shot): the woman-lifting-child silhouette
+  reads clearly against the Cascade haze, base/bowl legible, `__hasFountain` true, 11767 trees,
+  summit true, no page/console errors. Gotcha: the figure is built facing +z, so the only
+  orientation knob is `rotation.y`; everything else is local-space offsets in metres with feet
+  at the group's `figure.position.y` (1.62, top of the plinth). Test hook `__hasFountain`;
+  harness shoots `fps-fountain.png` (spawn → NE, pitch 7). Possible polish: actual jetting
+  water particles, a darker patina with green oxidation streaks, finer figure modeling.
 - **#12 (18:48–18:58)** NEAR-GROUND DETAIL — the flat-green eye-level tell (backlog #2;
   Joel's "flat green" note). The z17 satellite drape minifies to a smooth dark-green wash
   underfoot; now a **procedural luminance grain** modulates it, strong underfoot and faded
@@ -265,7 +284,10 @@ hooks instead: `window.__pauseSim=true; window.__step(1/60)` in a loop, read
    *(#11, on-summit landmarks):* Portland.gov + placespages + Wikipedia + RadioDiscussions/Yelp
    — confirmed the circular compass-rose plaza, seat wall, peak-ID plaques, Littmann bronze
    fountain, and the Healy Heights/Stonehenge broadcast tower S + a city radio tower in-park.
-   Still open: the bronze fountain statue as real geometry; sharper plaza paver/inlay texture.
+   *(#13, the fountain):* WebSearch → portland.gov + the59club + Wikipedia "Pioneer Woman
+   (Littman)" + portlandbridges — Littman's 1956 bronze: woman, hair swept back, lifting a
+   child in raised arms, ~3 m on a triangular granite base. Still open: sharper plaza paver/
+   inlay texture; jetting fountain water.
 0b. ~~**Richer illustrated backdrop**~~ — DONE in #9 (painted panorama cylinder: real-bearing
    Cascade peaks + layered ridgelines, Hood is the hero). Possible polish: clouds/alpenglow,
    parallax, sharper peak rock/snow texture, time-of-day tint matching the sun.
@@ -278,10 +300,11 @@ hooks instead: `window.__pauseSim=true; window.__step(1/60)` in a loop, read
    the satellite drape, strong underfoot, faded by ~180 m, hue-neutral & world-space tiled).
    Possible polish: a matching ground normal map for relief; wind-stirred grass billboards on
    the summit lawn; tint the grain very slightly green/tan to push the grass vs dirt read.
-3. ~~**Summit landmarks**~~ — DONE in #11 (compass-rose viewing plaza you spawn on, rays at
-   true peak bearings + a broadcast lattice tower S). Possible polish: the Littmann bronze
-   fountain statue as geometry, sharper paver/brass inlay texture, a low railing at the rim,
-   the bigger Healy Heights tower cluster on the backdrop, clear a few trees behind the tower.
+3. ~~**Summit landmarks**~~ — DONE in #11 (compass-rose viewing plaza + broadcast lattice
+   tower S) and #13 (the "Joy" bronze fountain — woman lifting a child — at the spawn plaza).
+   Possible polish: jetting water on the fountain + a green-oxidation patina, sharper plaza
+   paver/brass inlay texture, a low railing at the rim, the bigger Healy Heights tower cluster
+   on the backdrop, clear a few trees behind the tower.
 4. **Boundary feel** — current edge is a silent radial clamp. Add thickening fog + a
    "turn back" cue + gentler push so the level edge reads intentional.
 5. ~~**Touch controls for fps.html**~~ — DONE in #8 (analog stick + look drag + jump,
