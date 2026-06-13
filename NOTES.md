@@ -59,6 +59,29 @@ harnesses now point there). shoot-fps.js loads `index.html`. New game work happe
   hill. NOT YET DONE — do this before trees/landmarks; record refs used here.
 
 ## Iteration log
+- **#19 (2026-06-12)** FOREST SWAY + SHADING — the forest (11.8k firs ringing the whole level)
+  was the dominant visual but DEAD: static while the #17 grass swayed, and the NE-facing (away-
+  from-sun) cone sides crushed to near-black under Lambert, reading as a wall of flat dark cut-
+  outs (flagged in #10's gotcha + backlog #1/#9). Two fixes on the foliage `InstancedMesh`:
+  **(1) emissive floor** — `MeshLambertMaterial` gets `emissive '#16240f' (intensity 0.85)`
+  (trunks `#1a120c`/0.7), so the shadow side bottoms out at a dim forest green instead of black
+  → the canopy keeps depth; `fps-slope.png` now shows the foreground fir with a clear lit→shadow
+  GREEN gradient where before it was a black silhouette. **(2) wind sway** — same vertex-shader
+  trick as the grass (#17, zero per-frame CPU): `onBeforeCompile` injects a `uTime` uniform and
+  displaces `transformed.x/z` by `sin/cos(uTime·{0.9,0.7} + ph)·sway·{0.035,0.028}`, where
+  `sway = max(position.y − 1.0, 0)` (trunk/base planted, crown drifts) and `ph = (iPos.x+iPos.z)·
+  0.12` (each tree's world pos → a ~52 m gust wavelength so a breeze ROLLS across the hill rather
+  than every tree wobbling independently). Slower + smaller than the grass by design — big firs
+  barely move at the base, tips drift. New `treeWind` uniform ticked in the render loop next to
+  `grassWind`. Verified headless: exit 0, trees 11884, grass 5055, summit/fountain true, FOV
+  kick + edge falloff intact, all 11 views render, no page/console errors; `fps-slope.png` /
+  `fps-summit-down.png` confirm the firs now read as green conifers with form (not black cut-
+  outs) and the forest ring looks healthy. **The sway itself is FELT live — a still frame can't
+  show the breeze; Joel's eyes confirm the motion** (same as the grass). Gotcha: weight the sway
+  by `position.y − 1.0` (not raw `position.y`) or the trunk base shears sideways; and emissive is
+  uniform across instances (per-instance tint still rides `setColorAt` on the diffuse). Possible
+  polish: vary species (broadleaf/cedar silhouettes), billboard-LOD the far trees, gust-gated
+  amplitude tied to the same wind LFO that swells the audio bed.
 - **#18 (19:40, Joel-directed)** GEOREF + COMPASS FIX — Joel (live, from his phone): "Compass is
   running the ground. Also some things are in the wrong location. Take a closer look at the maps and
   satellite images." Two real bugs, both verified against ground truth (OSM Overpass + Esri imagery,
@@ -419,10 +442,10 @@ Remaining work is world richness + the boundary/pause polish below.*
    Cascade peaks + layered ridgelines, Hood is the hero). Possible polish: clouds/alpenglow,
    parallax, sharper peak rock/snow texture, time-of-day tint matching the sun.
 1. ~~**Trees / forest**~~ — DONE in #10 (~11.8k instanced Douglas-firs, planted on the
-   imagery's green mask, summit clearing kept open). Possible polish: vary species (add
-   broadleaf/cedar shapes), wind sway, billboard-LOD the far trees, soften the hard cone
-   shading (they read near-black on shadowed sides), and thin the canopy a touch if it feels
-   too uniform on the live page.
+   imagery's green mask, summit clearing kept open); ~~wind sway~~ + ~~soften the near-black
+   shaded sides~~ DONE in #19 (vertex-shader crown sway + emissive green floor). Possible
+   polish: vary species (add broadleaf/cedar shapes), billboard-LOD the far trees, thin the
+   canopy a touch if it feels too uniform on the live page.
 2. ~~**Sharpen the near foreground**~~ — DONE in #12 (procedural luminance grain modulating
    the satellite drape, strong underfoot, faded by ~180 m, hue-neutral & world-space tiled).
    Possible polish: a matching ground normal map for relief; wind-stirred grass billboards on
@@ -446,7 +469,7 @@ Remaining work is world richness + the boundary/pause polish below.*
 8. **Perf**: the DEM/imagery refetch on every load; consider caching or a lower first-paint
    then upgrade. Build is ~17 s under swiftshader, faster on real bandwidth.
 9. **Foliage / world polish** (the deepest remaining "real place" wins): vary tree species
-   (broadleaf/cedar shapes), soft TREE wind sway, soften the near-black shaded cone sides;
-   jetting fountain water + patina. ~~Wind-stirred grass on the summit lawn~~ DONE in #17
+   (broadleaf/cedar shapes); jetting fountain water + patina. ~~Soft TREE wind sway + soften
+   the near-black shaded cone sides~~ DONE in #19. ~~Wind-stirred grass on the summit lawn~~ DONE in #17
    (5055 instanced sway-shader tufts on the open crown). Grass polish: a ground normal map
    under it, longer/thinner blades at the rim, seasonal dry-grass tan.
