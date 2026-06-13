@@ -59,6 +59,30 @@ harnesses now point there). shoot-fps.js loads `index.html`. New game work happe
   hill. NOT YET DONE — do this before trees/landmarks; record refs used here.
 
 ## Iteration log
+- **#26 (2026-06-12)** PICNIC TABLES ON THE LAWN — drained the FEEDBACK.md cloud item first
+  (already reverted by 155527f/2650833; verified the clean blue sky on a landscape AND a
+  portrait/mobile render, did NOT re-attempt clouds per Joel's "genuinely good or leave it" bar),
+  then picked a grounded real-place win for the open crown. **Refs:** WebSearch → Portland.gov
+  Council Crest page + Audiala visitor guide — confirmed "picnic tables… spacious lawns and
+  benches" + public art (Lewis & Clark Candelabra, the bronze mother-and-child) as real on-site
+  amenities. The grassy summit had a paved loop + benches (#21) but the lawn itself was bare
+  between the plaza and the ring; added **3 A-frame wooden picnic tables** scattered on the open
+  crown. `makePicnicTableGeo()` builds one merged mesh of axis-aligned slabs — a 1.9 m tabletop at
+  y=0.75, two cantilevered bench seats at y=0.45 (±0.64 m), and a sturdy end-frame at each end
+  (central post + seat crossbar + two short legs) so it reads unmistakably as a picnic table from
+  any angle, feet planted at y=0. Placed via a shared `PICNIC` const (bearings 72/150/232°, dist
+  24–30 m — ESE/SSE/SW lawn, clear of the fountain NE, water tank NNW, and the loop trail), each
+  ground-clamped (`groundAt`) with a small per-table yaw so they're not robotically aligned, warm
+  wood Lambert `#7a5c3a`. `plantGrass` now skips a 1.7 m footprint around each table (grass
+  4670→4654). Verified headless: exit 0, `picnic:3`, trees 11923, summit/fountain/water/path all
+  true, FOV kick + edge + pause intact, all 13+ views render, no page/console errors.
+  `fps-picnic-close.png` (landscape) + `fps-picnic-portrait.png` (390×844 phone aspect) both show a
+  clean A-frame table on the lawn against the fir ring under a crisp blue sky. New hook
+  `__picnicCount`; harness shoots `fps-picnic.png` (on-lawn view). Gotcha: keep the table geometry
+  axis-aligned (no rotated leg boards) — it reads fine and avoids the fiddly A-frame leg trig; and
+  clear the grass footprint or tufts poke up through the tabletop. Possible polish: a sun-bleached
+  wood tint on the tabletop, a couple of picnic tables nearer the plaza, the Lewis & Clark
+  Candelabra monument as distinctive public art.
 - **#25 (2026-06-12, Joel-directed via FEEDBACK.md)** FIRS MUCH BIGGER — Joel (Slack): "The
   Douglas firs need to be much bigger… mature firs tower the way real Council Crest old-growth
   does. Bump trunk height + crown size meaningfully, not a token nudge." The forest had been
@@ -607,11 +631,13 @@ Boundary (#15) + pause/help (#20) are now done too — remaining work is pure wo
 3. ~~**Summit landmarks**~~ — DONE in #11 (compass-rose viewing plaza + broadcast lattice
    tower S), #13 (the "Joy" bronze fountain — woman lifting a child — at the spawn plaza),
    #21 (paved summit loop trail + connector spur + 4 viewpoint benches at the Cascade sightlines),
-   and #22 (the real Council Crest water tank — OSM-georeferenced cylindrical reservoir, NNW
-   between the plaza and the radio tower).
+   #22 (the real Council Crest water tank — OSM-georeferenced cylindrical reservoir, NNW
+   between the plaza and the radio tower), and #26 (3 A-frame picnic tables scattered on the
+   open lawn — a confirmed Portland.gov amenity).
    Possible polish: jetting water on the fountain + a green-oxidation patina, sharper plaza
    paver/brass inlay texture, a low railing at the rim, the bigger Healy Heights tower cluster
-   on the backdrop, clear a few trees behind the tower; path curbs/lampposts/worn dirt margins.
+   on the backdrop, clear a few trees behind the tower; path curbs/lampposts/worn dirt margins;
+   the Lewis & Clark Candelabra monument (distinctive on-site public art).
 4. ~~**Boundary feel**~~ — DONE in #15 (input-speed falloff + inward drift + thickening fog +
    vignette + "turn back" cue across a 160 m margin; visual intensity decoupled from the soft
    stop). Possible polish: a faint directional arrow pointing back to the summit; tie the cue

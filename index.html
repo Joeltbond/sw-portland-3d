@@ -175,6 +175,14 @@ let   PLAZA_TOP = null;                      // plaza deck world-y (set once the
 const PATH_R = 52, PATH_W = 2.6;            // paved summit loop trail: radius + width (m)
 const PATH_SPUR = 100;                       // bearing (°) of the plaza→loop connector spur (toward Hood, E)
 let   PATH_BUILT = false;
+// A-frame picnic tables scattered on the open grassy crown (Portland.gov: picnic tables +
+// spacious lawns); placed between the plaza rim and the loop trail, clear of fountain/water/path
+const PICNIC = [
+  { bearing: 72,  dist: 28, yaw:  0.45 },     // ESE lawn, off the Hood spur
+  { bearing: 150, dist: 24, yaw: -0.8  },     // SSE lawn
+  { bearing: 232, dist: 30, yaw:  0.2  },     // SW lawn, toward the Tualatin view
+];
+let   PICNIC_BUILT = 0;
 // real 142 m lattice comm tower NW of the summit (OSM: 45.499505, -122.708994 ≈ 71 m W, 89 m N)
 const TOWER = { x: -71, z: -89, h: 95 };     // broadcast lattice tower, bearing ~321° (NW), ~113 m out
 // real Council Crest water tank (OSM way 32356677, man_made=storage_tank/content=water): a ~11 m-
@@ -665,6 +673,13 @@ function plantGrass() {
       if (Math.abs(r - PATH_R) < PATH_W / 2 + 0.4) continue; // keep the loop trail clear of grass
       if (Math.hypot(x - fx, z - fz) < 2.4) continue;        // clear the fountain footprint
       if (Math.hypot(x - WATER.x, z - WATER.z) < WATER.r + 1.2) continue;  // clear the water-tank footprint
+      let onTable = false;                                   // clear the picnic-table footprints
+      for (const p of PICNIC) {
+        const px = Math.sin(p.bearing * Math.PI / 180) * p.dist;
+        const pz = -Math.cos(p.bearing * Math.PI / 180) * p.dist;
+        if (Math.hypot(x - px, z - pz) < 1.7) { onTable = true; break; }
+      }
+      if (onTable) continue;
       place.push([x, z, 0.8 + rnd() * 0.75, rnd() * Math.PI * 2]);
     }
   }
@@ -1001,6 +1016,23 @@ function makeBenchGeo() {
   return mergeGeometries(P);
 }
 
+// a classic A-frame wooden picnic table (one merged mesh), built centered with feet at y=0.
+// Axis-aligned slabs: tabletop + two cantilevered bench seats on a sturdy end-frame each end.
+function makePicnicTableGeo() {
+  const P = [];
+  const slab = (w, h, d, x, y, z) => { const b = new THREE.BoxGeometry(w, h, d); b.translate(x, y, z); P.push(b); };
+  slab(1.9, 0.06, 0.78, 0, 0.75, 0);                     // tabletop slab (length along x)
+  slab(1.9, 0.05, 0.30, 0, 0.45,  0.64);                 // bench seat (+z)
+  slab(1.9, 0.05, 0.30, 0, 0.45, -0.64);                 // bench seat (−z)
+  for (const ex of [-0.82, 0.82]) {                      // an end-frame at each end
+    slab(0.10, 0.75, 0.20, ex, 0.375, 0);                // central post under the tabletop
+    slab(0.10, 0.06, 1.62, ex, 0.45, 0);                 // seat crossbar tying both benches
+    slab(0.10, 0.46, 0.10, ex, 0.225,  0.64);            // short leg under +z seat
+    slab(0.10, 0.46, 0.10, ex, 0.225, -0.64);            // short leg under −z seat
+  }
+  return mergeGeometries(P);
+}
+
 function buildPath() {
   const tex = makePathTexture();
   // loop trail: a closed ring sampled around the crown, conformed to the terrain
@@ -1029,6 +1061,19 @@ function buildPath() {
     scene.add(bench);
   }
   PATH_BUILT = true;
+
+  // picnic tables on the open lawn (a confirmed Council Crest amenity the grass was missing)
+  const tableGeo = makePicnicTableGeo();
+  const tableMat = new THREE.MeshLambertMaterial({ color: '#7a5c3a' });
+  for (const p of PICNIC) {
+    const px = Math.sin(p.bearing * Math.PI / 180) * p.dist;
+    const pz = -Math.cos(p.bearing * Math.PI / 180) * p.dist;
+    const table = new THREE.Mesh(tableGeo, tableMat);
+    table.position.set(px, groundAt(px, pz), pz);
+    table.rotation.y = p.yaw;
+    scene.add(table);
+    PICNIC_BUILT++;
+  }
 }
 
 // Seamless, tileable ground-detail grain (luminance only). Periodic value-noise (sine
@@ -1512,6 +1557,7 @@ window.__hasSummit = () => PLAZA_TOP !== null;   // plaza/tower built
 window.__hasFountain = () => !!__fountain;       // "Joy" bronze fountain built
 window.__hasWater = () => !!__water;             // Council Crest water tank built
 window.__hasPath = () => PATH_BUILT;             // paved loop trail + benches built
+window.__picnicCount = () => PICNIC_BUILT;       // A-frame picnic tables on the lawn
 // audio harness (headless can't hear — these confirm the graph wires up without throwing)
 window.__initAudio = () => { initAudio(); return window.__audioState(); };
 window.__audioState = () => audio ? { state: audio.ctx.state, sampleRate: audio.ctx.sampleRate, masterGain: audio.master.gain.value } : null;

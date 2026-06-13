@@ -22,18 +22,16 @@ normal backlog.
   the Council Crest walk (don't bolt on game mechanics). Verify any change on a
   PORTRAIT/mobile render.
 
-- 2026-06-12 — "Pretty sloppy and bad" (Joel, with a phone screenshot of the
-  Council Crest view). The "drifting cumulus sky" (commit ab570b3) rendered as
-  giant white blobs covered in rainbow speckle/dither noise, smeared right over
-  Mt Hood and the Cascades — it read as broken texture noise, not clouds.
-  **Already reverted** (commit 155527f) — the bare blue sky is back. DO NOT
-  re-add clouds with the same approach. Only attempt a sky again if you can make
-  it look genuinely good: small, crisp, sparse puffs high in the dome, no
-  speckle/noise artifacts, never occluding the peaks — and verify it on a
-  PORTRAIT/mobile-aspect render (Joel views from his phone), not just landscape.
-  If you can't clear that bar, leave the clean blue sky alone.
-
 ## Handled
+
+- 2026-06-12 — "Pretty sloppy and bad" — the drifting cumulus sky (ab570b3)
+  rendered as speckle-noise blobs smeared over Mt Hood. → Confirmed already
+  reverted (155527f / 2650833): the bare blue sky is back, and I verified it
+  clean this iteration on BOTH a landscape and a PORTRAIT/mobile-aspect render
+  (crisp blue dome, no cloud/speckle artifacts, peaks unoccluded). Per Joel's
+  bar I did NOT re-attempt clouds — couldn't clear "genuinely good, no speckle,
+  never over the peaks" with confidence, so the clean sky stays. Spent the
+  iteration on a grounded real-place win instead (picnic tables — see NOTES #26).
 
 - 2026-06-12 — "The Douglas firs need to be much bigger." → rebuilt the conifer
   geometry from shrub-scale (~7 m crown top) to old-growth: fir crown now stacks
