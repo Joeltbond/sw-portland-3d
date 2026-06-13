@@ -83,6 +83,14 @@ harnesses now point there). shoot-fps.js loads `index.html`. New game work happe
      render; `fps-tower.png` shows the tower NW, `fps-plaza.png`/repro show the granite deck. Test
      view coords + tower heading (172°SSE→321°NW) updated in shoot-fps.js to match the new origin.
      **Refs:** OSM Overpass (peak/viewpoint/tower nodes), Esri World Imagery z17 tiles.
+  **Folded in (Joel: "resolve this with the other changes"):** the concurrent auto-improver was
+  killed mid-iteration on a backdrop pass; recovered its two edits from its session transcript and
+  re-applied them here so the work wasn't lost — (a) richer `drawPeak` (cool blue-grey rock body,
+  jagged snowline with couloir fingers, rock ribs through the snow, SW-sun→NE-shadow form shading,
+  per-peak atmospheric haze via `p.haze`/`p.rock` with safe fallbacks) and (b) drifting cirrus cloud
+  bands across the upper sky (deterministic PRNG, 30 ellipses). Verified in `fps-hood.png` (Hood's
+  asymmetric profile + couloirs) and `fps-helens.png` (faint peaks washed by haze) — renders clean,
+  no errors. The 10-min `swpdx3d-improve` launchd job was re-loaded after this commit.
 - **#17 (19:17–19:28)** SUMMIT-LAWN GRASS — the deepest remaining "real place" win (backlog #9):
   Council Crest's signature is its OPEN GRASSY crown (the forest #10 deliberately leaves r<75
   clear), but at eye level that clearing read as flat satellite green + #12 grain — the most-seen

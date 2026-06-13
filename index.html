@@ -193,47 +193,88 @@ function drawPeak(g, cx, hY, p, W) {
   const top = hY - p.h, hw = p.w / 2;
   g.save();
   g.globalAlpha = p.faint || 1;
-  g.beginPath();
-  g.moveTo(cx - hw, hY);
-  if (p.dome) {                          // St Helens — broad, flat-topped truncated dome
-    g.lineTo(cx - hw * 0.5, top + p.h * 0.16);
-    g.quadraticCurveTo(cx, top - 3, cx + hw * 0.5, top + p.h * 0.16);
-    g.lineTo(cx + hw, hY);
-  } else if (p.hero) {                    // Hood — summit left of center, steep N face, long S shoulder
-    g.lineTo(cx - hw * 0.18, top + p.h * 0.04);
-    g.lineTo(cx - hw * 0.05, top);
-    g.lineTo(cx + hw, hY);
-  } else {
-    g.lineTo(cx - hw * 0.05, top);
-    g.lineTo(cx + hw, hY);
-  }
-  g.closePath();
-  const body = g.createLinearGradient(0, top, 0, hY);
-  body.addColorStop(0, p.tint);
-  body.addColorStop(1, '#cfc6b6');       // flanks dissolve into the horizon haze
-  g.fillStyle = body; g.fill();
-  // a faint shaded right flank gives the cone form instead of a flat cutout
-  g.save(); g.clip();
-  g.beginPath();
-  g.moveTo(cx + hw * 0.02, top); g.lineTo(cx + hw, hY); g.lineTo(cx + hw * 0.02, hY);
-  g.closePath();
-  g.fillStyle = 'rgba(70,92,120,0.16)'; g.fill();
-  g.restore();
-  // snowcap: clip to the silhouette, fill from the summit down to a jagged snowline
-  g.save(); g.clip();
+
+  // --- silhouette (re-traced when used as a clip) ---
+  const trace = () => {
+    g.beginPath();
+    g.moveTo(cx - hw, hY);
+    if (p.dome) {                          // St Helens — broad, flat-topped truncated dome
+      g.lineTo(cx - hw * 0.5, top + p.h * 0.16);
+      g.quadraticCurveTo(cx, top - 3, cx + hw * 0.5, top + p.h * 0.16);
+      g.lineTo(cx + hw, hY);
+    } else if (p.hero) {                    // Hood — summit just left of center, steep N face, long S shoulder
+      g.lineTo(cx - hw * 0.20, top + p.h * 0.06);
+      g.lineTo(cx - hw * 0.04, top);
+      g.lineTo(cx + hw * 0.34, top + p.h * 0.20);
+      g.lineTo(cx + hw, hY);
+    } else {
+      g.lineTo(cx - hw * 0.05, top);
+      g.lineTo(cx + hw, hY);
+    }
+    g.closePath();
+  };
+
+  trace();
+  g.save();
+  g.clip();
+  const x0 = cx - hw, y0 = top - 8, ww = p.w, hh = p.h + 12;
+
+  // 1) rock body — cool blue-grey at altitude, melting into warm horizon haze at the base
+  const body = g.createLinearGradient(0, top - 6, 0, hY);
+  body.addColorStop(0, p.rock || '#828d9f');
+  body.addColorStop(0.62, '#9a9b97');
+  body.addColorStop(1, '#cfc6b6');
+  g.fillStyle = body; g.fillRect(x0, y0, ww, hh);
+
+  // 2) snowcap — jagged snowline with a few couloir fingers running down the gullies
   const snowY = top + p.h * p.snow;
-  g.beginPath(); g.moveTo(cx - hw, snowY);
-  let sd = 1.7;
-  for (let x = cx - hw, k = 0; x <= cx + hw; x += hw / 4, k++) {
-    sd = -sd; g.lineTo(x, snowY + sd * p.h * 0.05 - p.h * (k & 1 ? 0.02 : 0));
+  g.beginPath();
+  g.moveTo(cx - hw, snowY + p.h * 0.03);
+  const N = 8;
+  for (let k = 0; k <= N; k++) {
+    const x = cx - hw + ww * (k / N);
+    let y = snowY + (k & 1 ? 1 : -1) * p.h * 0.04;
+    if (k % 3 === 1) y += p.h * 0.11;       // a snow finger reaching down a couloir
+    g.lineTo(x, y);
   }
-  g.lineTo(cx + hw, snowY); g.lineTo(cx + hw, top - 4); g.lineTo(cx - hw, top - 4);
+  g.lineTo(cx + hw, top - 6); g.lineTo(cx - hw, top - 6);
   g.closePath();
-  const snow = g.createLinearGradient(0, top, 0, snowY);
-  snow.addColorStop(0, 'rgba(245,249,252,0.97)');
-  snow.addColorStop(1, 'rgba(214,224,234,0.55)');
+  const snow = g.createLinearGradient(0, top - 6, 0, snowY + p.h * 0.12);
+  snow.addColorStop(0, 'rgba(250,252,255,0.98)');
+  snow.addColorStop(1, 'rgba(205,216,230,0.45)');
   g.fillStyle = snow; g.fill();
-  g.restore();
+
+  // 3) rock ribs poking through the upper snow for texture
+  g.globalAlpha = (p.faint || 1) * 0.5;
+  g.strokeStyle = 'rgba(96,104,118,0.6)';
+  g.lineWidth = Math.max(1, p.w * 0.010);
+  for (let k = 0; k < 3; k++) {
+    const rx = cx - hw * 0.30 + k * hw * 0.30;
+    g.beginPath();
+    g.moveTo(rx, top + p.h * 0.12);
+    g.lineTo(rx + hw * 0.05, snowY - p.h * 0.02);
+    g.stroke();
+  }
+  g.globalAlpha = p.faint || 1;
+
+  // 4) form shading over BOTH rock and snow — SW sun lights the left flank, NE falls to shadow
+  const form = g.createLinearGradient(x0, 0, cx + hw, 0);
+  form.addColorStop(0,   'rgba(255,246,226,0.18)');   // sunlit SW flank
+  form.addColorStop(0.5, 'rgba(255,255,255,0.0)');
+  form.addColorStop(1,   'rgba(44,60,86,0.34)');      // shadowed NE flank
+  g.fillStyle = form; g.fillRect(x0, y0, ww, hh);
+
+  g.restore();  // end clip
+
+  // 5) atmospheric perspective — wash distant peaks toward the sky haze
+  const hazeAmt = p.haze != null ? p.haze : (1 - (p.faint || 1)) * 0.7;
+  if (hazeAmt > 0) {
+    g.save(); trace(); g.clip();
+    g.globalAlpha = (p.faint || 1) * hazeAmt;
+    g.fillStyle = '#c3cdda';
+    g.fillRect(x0, y0, ww, hh);
+    g.restore();
+  }
   g.restore();
 }
 function makeBackdrop() {
@@ -248,6 +289,20 @@ function makeBackdrop() {
   glow.addColorStop(0.72, 'rgba(228,217,197,0.40)');
   glow.addColorStop(1, 'rgba(223,212,192,0.78)');
   g.fillStyle = glow; g.fillRect(0, hY - 170, W, 200);
+
+  // soft cloud bands drifting across the upper sky (behind the peaks) — wispy cirrus that
+  // adds depth without competing with the Cascades. Deterministic PRNG → stable headless shots.
+  let cseed = 1337; const crnd = () => { cseed = (cseed * 16807) % 2147483647; return cseed / 2147483647; };
+  g.save();
+  g.fillStyle = '#ffffff'; g.shadowColor = 'rgba(255,255,255,0.85)'; g.shadowBlur = 28;
+  for (let i = 0; i < 30; i++) {
+    const cxc = crnd() * W;
+    const cyc = hY - 130 - crnd() * 250;                 // a band of sky above the horizon
+    const cw = 140 + crnd() * 280, ch = 10 + crnd() * 16;
+    g.globalAlpha = 0.08 + crnd() * 0.16;
+    g.beginPath(); g.ellipse(cxc, cyc, cw / 2, ch / 2, 0, 0, Math.PI * 2); g.fill();
+  }
+  g.restore();
 
   // downtown towers in the valley to the NE — a faint hazy cluster sitting low on the horizon
   const dtx = bx(bearingTo(45.5187, -122.6790));
