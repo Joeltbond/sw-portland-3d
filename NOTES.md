@@ -59,6 +59,32 @@ harnesses now point there). shoot-fps.js loads `index.html`. New game work happe
   hill. NOT YET DONE — do this before trees/landmarks; record refs used here.
 
 ## Iteration log
+- **#20 (2026-06-12)** PAUSE / HELP OVERLAY — the last game-feel touch on the checklist (backlog
+  #6). Until now Esc / pointer-unlock just dumped you back to the bare **enter** screen ("Council
+  Crest · click to enter") — indistinguishable from a cold boot, the classic "did it reset?" tell.
+  Now Esc shows a real **Paused** card, visibly distinct from first-entry, with a proper controls
+  legend so the page is self-documenting. The diff (recovered from a prior interrupted run, verified
+  + shipped this iteration): (1) the `#play` overlay is restyled into a frosted **card** (blur +
+  border + drop-shadow) with the title, a `Portland's high point · 1073 ft` subline, a **two-column
+  key→action legend** (desktop: WASD/Shift/Space/mouse/Esc; a separate touch legend: left-thumb/
+  push-out/drag-right/jump/❚❚), and a pulsing hint. (2) A `started` flag splits the two states:
+  `enterGame()` (lock/tap → title "Council Crest", hint hidden, HUD on, audio up) vs `showPause()`
+  (title "Paused", hint "click/tap to resume", crosshair off, **inputs cleared** — `keys.clear()`,
+  `wantJump=false`, touch.move/sprint off — so you don't drift or hop on resume, audio ducked to
+  0.18). (3) `controls 'unlock'` now routes to `showPause()` only `if (started)` (so the cold-boot
+  screen is never mislabeled "Paused"); clicking the card re-locks → `enterGame()` restores
+  everything. (4) Phones have no Esc, so the touch HUD gets a semi-transparent **❚❚ pause button**
+  (top-right) that resets the stick + calls `showPause()`; the resume tap re-enters without pointer
+  lock. Desktop and touch paths are unaffected otherwise. Verified headless (new `__showPause` hook,
+  since headless can't drive a true Esc/pointer-unlock): exit 0, `pause:{visible:true,title:"Paused",
+  hint:"click to resume"}`, mobile `{hint:"tap to resume",touchLegend:true,hasPauseBtn:true}`; trees
+  11884, grass 5055, summit/fountain true, FOV/edge intact, all 11 views render, no page/console
+  errors. `fps-pause.png` shows the frosted Paused card + keyboard legend over a dimmed hillside
+  (Hood on the horizon); `fps-mobile-pause.png` shows the touch legend + resume hint. Gotcha: gate
+  the unlock→pause on `started` or the very first pointer-unlock (or any lock failure) relabels the
+  enter screen "Paused"; and CLEAR held inputs in `showPause()` or a key/jump held across the pause
+  fires the instant you resume. **The movement-feel + game-feel checklist from Joel's "FPS without
+  shooting" bar is now fully closed** — remaining work is pure world richness/polish.
 - **#19 (2026-06-12)** FOREST SWAY + SHADING — the forest (11.8k firs ringing the whole level)
   was the dominant visual but DEAD: static while the #17 grass swayed, and the NE-facing (away-
   from-sun) cone sides crushed to near-black under Lambert, reading as a wall of flat dark cut-
@@ -420,7 +446,7 @@ harnesses now point there). shoot-fps.js loads `index.html`. New game work happe
 ## Next ideas (three.js `index.html` is now the main track — priority order)
 *Movement-feel checklist from Joel's "FPS without shooting" bar is now COMPLETE: accel/momentum
 (#6), gravity+jump (#6), sprint (#6), sprint FOV kick (#14), head bob (#6), pointer-lock look (#6).
-Remaining work is world richness + the boundary/pause polish below.*
+Boundary (#15) + pause/help (#20) are now done too — remaining work is pure world richness/polish.*
 0. **Reference-photo pass (DO FIRST, before any visual work)** — study real Council
    Crest photos (WebSearch/WebFetch), then make the summit match: grassy clearing, the
    circular brick plaza + fountain, the radio/TV towers, the Douglas-fir ring, paved loop
@@ -461,8 +487,10 @@ Remaining work is world richness + the boundary/pause polish below.*
    text to the actual nearest in-park landmark; a subtle low audio cue at the rim.
 5. ~~**Touch controls for fps.html**~~ — DONE in #8 (analog stick + look drag + jump,
    capability-gated). Still open: a fullscreen button, and Joel-confirmed feel/sensitivity.
-6. **Pause/help overlay on Esc** (beyond the click-to-enter), minimap-free — a real
-   game-feel touch; Esc currently just ducks audio + releases the cursor.
+6. ~~**Pause/help overlay on Esc**~~ — DONE in #20 (a distinct "Paused" card w/ controls legend,
+   not the bare enter screen; ❚❚ pause button on touch; inputs cleared on pause so no drift/hop on
+   resume). Possible polish: a resume countdown, a "back to summit" recenter button, settings (audio
+   volume / look sensitivity sliders) since the pause screen is now the natural home for them.
 7. ~~**Promote fps.html → index.html**~~ — DONE in #16 (three.js level is now the canonical
    URL; MapLibre retired to maplibre-legacy.html). Possible follow-up: delete maplibre-legacy
    .html + its harnesses entirely once Joel's sure he wants no map fallback at all.

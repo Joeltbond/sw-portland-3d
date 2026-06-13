@@ -97,6 +97,24 @@ const VIEWS = [
     window.__look(-122.70809, 45.49871, 40, -6);
   });
 
+  // ---- pause/help overlay: Esc / pointer-unlock now shows a real pause screen with a
+  // controls legend (not the bare enter screen). Headless can't drive a true Esc, so the
+  // __showPause hook stands in for the pointer-unlock event.
+  const paused = await page.evaluate(() => {
+    window.__showPause();
+    const el = document.getElementById('play');
+    return {
+      visible: getComputedStyle(el).display !== 'none',
+      title: document.getElementById('playTitle').textContent,
+      hint: document.getElementById('playHint').textContent,
+    };
+  });
+  console.log('pause:', JSON.stringify(paused));
+  await new Promise(r => setTimeout(r, 450));
+  await page.screenshot({ path: OUT + 'fps-pause.png' });
+  console.log('shot fps-pause.png');
+  await page.evaluate(() => { document.getElementById('play').style.display = 'none'; });
+
   for (const [file, lng, lat, heading, pitch] of VIEWS) {
     await page.evaluate((lng, lat, heading, pitch) => window.__look(lng, lat, heading, pitch),
       lng, lat, heading, pitch);
@@ -120,6 +138,20 @@ const VIEWS = [
   await new Promise(r => setTimeout(r, 1400));
   await page.screenshot({ path: OUT + 'fps-mobile.png' });
   console.log('shot fps-mobile.png  touchMode=', touchMode);
+
+  // ---- mobile pause: the touch HUD has a ❚❚ pause button (no Esc on phones); the pause
+  // card swaps to the touch legend + "tap to resume".
+  const pausedTouch = await page.evaluate(() => {
+    window.__showPause();
+    return {
+      hint: document.getElementById('playHint').textContent,
+      touchLegend: getComputedStyle(document.getElementById('legendTouch')).display !== 'none',
+      hasPauseBtn: !!document.getElementById('btnPause'),
+    };
+  });
+  await new Promise(r => setTimeout(r, 450));
+  await page.screenshot({ path: OUT + 'fps-mobile-pause.png' });
+  console.log('shot fps-mobile-pause.png ', JSON.stringify(pausedTouch));
 
   await browser.close();
 })().catch(e => { console.error(e.message); process.exit(1); });

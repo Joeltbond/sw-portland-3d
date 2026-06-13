@@ -43,11 +43,29 @@
       background: rgba(8,12,18,.55); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
       pointer-events: auto; cursor: pointer; flex-direction: column;
     }
-    #play .title { font: 200 40px/1.1 -apple-system, system-ui, sans-serif; color: #fff; }
-    #play .sub { margin-top: 16px; color: #cdd8e2; font-size: 14px; text-align: center; }
+    #play .card {
+      display: flex; flex-direction: column; align-items: center;
+      padding: 34px 46px 28px; border-radius: 18px;
+      background: rgba(12,17,25,.5); border: 1px solid rgba(255,255,255,.10);
+      -webkit-backdrop-filter: blur(7px); backdrop-filter: blur(7px);
+      box-shadow: 0 18px 60px rgba(0,0,0,.46);
+    }
+    #play .title { font: 200 40px/1.1 -apple-system, system-ui, sans-serif; color: #fff; letter-spacing: .01em; }
+    #play .loc { margin-top: 7px; color: #94a7b8; font-size: 11px; letter-spacing: .2em; text-transform: uppercase; }
+    #play .legend {
+      margin-top: 24px; display: grid; grid-template-columns: auto auto; gap: 10px 18px;
+      align-items: center; font-size: 13px;
+    }
+    #play .legend .k { justify-self: end; }
+    #play .legend .a { justify-self: start; color: #aebccb; }
+    #play .hint {
+      margin-top: 26px; color: #eaf0f4; font-size: 13px; letter-spacing: .05em;
+      animation: pausePulse 2.2s ease-in-out infinite;
+    }
+    @keyframes pausePulse { 0%,100% { opacity: .5 } 50% { opacity: 1 } }
     #play kbd {
       background: rgba(255,255,255,.14); border-radius: 4px; padding: 1px 6px;
-      font-family: inherit; font-weight: 600;
+      font-family: inherit; font-weight: 600; color: #f0f4f8;
     }
     #attr {
       position: absolute; right: 6px; bottom: 5px; font-size: 10px; color: rgba(255,255,255,.55);
@@ -83,6 +101,15 @@
       opacity: 0; transition: opacity .12s; text-shadow: 0 1px 2px rgba(0,0,0,.65);
     }
     #sprintPip.on { opacity: 1; }
+    #btnPause {
+      position: absolute; right: 16px; top: 14px; width: 38px; height: 38px;
+      border-radius: 50%; border: 1px solid rgba(255,255,255,.22);
+      background: rgba(15,18,22,.34); color: #eaf0f4; font-size: 14px;
+      display: flex; align-items: center; justify-content: center; pointer-events: auto;
+      user-select: none; -webkit-user-select: none;
+      -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px);
+    }
+    #btnPause.press { background: rgba(120,162,212,.5); }
   </style>
 </head>
 <body>
@@ -96,14 +123,29 @@
     <div id="sprintPip">▲ sprint</div>
     <div id="stick"><div id="stickKnob"></div></div>
     <div id="btnJump">jump</div>
+    <div id="btnPause">❚❚</div>
   </div>
 </div>
 <div id="loading">building Council Crest…</div>
 <div id="play">
-  <div class="title">Council Crest</div>
-  <div class="sub">
-    <kbd>W A S D</kbd> move · <kbd>Shift</kbd> sprint · <kbd>Space</kbd> jump · <kbd>mouse</kbd> look · <kbd>Esc</kbd> release<br/><br/>
-    click to enter
+  <div class="card">
+    <div class="title" id="playTitle">Council Crest</div>
+    <div class="loc">Portland's high point · 1073 ft</div>
+    <div class="legend" id="legendDesktop">
+      <span class="k"><kbd>W A S D</kbd></span><span class="a">move</span>
+      <span class="k"><kbd>Shift</kbd></span><span class="a">sprint</span>
+      <span class="k"><kbd>Space</kbd></span><span class="a">jump</span>
+      <span class="k"><kbd>mouse</kbd></span><span class="a">look around</span>
+      <span class="k"><kbd>Esc</kbd></span><span class="a">pause</span>
+    </div>
+    <div class="legend" id="legendTouch" style="display:none">
+      <span class="k"><kbd>left thumb</kbd></span><span class="a">move</span>
+      <span class="k"><kbd>push out</kbd></span><span class="a">sprint</span>
+      <span class="k"><kbd>drag right</kbd></span><span class="a">look around</span>
+      <span class="k"><kbd>jump</kbd></span><span class="a">hop</span>
+      <span class="k"><kbd>❚❚</kbd></span><span class="a">pause</span>
+    </div>
+    <div class="hint" id="playHint">click to enter</div>
   </div>
 </div>
 
@@ -938,28 +980,41 @@ const vignetteEl = document.getElementById('vignette');
 const edgeCueEl = document.getElementById('edgeCue');
 let edgeView = 0;                           // 0..1 boundary depth, driven by step(), shown by the render loop
 
+const playTitle = document.getElementById('playTitle');
+const playHint = document.getElementById('playHint');
+let started = false;                          // false until the first enter → tells the enter vs pause screen apart
+
 if (TOUCH) {
-  document.querySelector('#play .sub').innerHTML =
-    'left thumb to move · push out to sprint · drag right side to look · <kbd>jump</kbd> to hop<br/><br/>tap to enter';
+  document.getElementById('legendDesktop').style.display = 'none';
+  document.getElementById('legendTouch').style.display = 'grid';
+  playHint.textContent = 'tap to enter';
 }
 
 function enterGame() {
+  started = true;
+  playTitle.textContent = 'Council Crest';
   play.style.display = 'none';
   crosshair.style.display = 'block';
   spotEl.style.display = 'block';
   if (TOUCH) touchHud.style.display = 'block';
   fadeAmbient(1);
 }
+function showPause() {                        // a real pause/help screen, distinct from the initial enter screen
+  playTitle.textContent = 'Paused';
+  playHint.textContent = TOUCH ? 'tap to resume' : 'click to resume';
+  play.style.display = 'flex';
+  crosshair.style.display = 'none';
+  if (TOUCH) { touchHud.style.display = 'none'; touch.move = false; touch.sprint = false; }
+  keys.clear(); wantJump = false;            // drop held inputs so you don't drift/jump on resume
+  fadeAmbient(0.18);                          // duck the hillside while paused
+}
 play.addEventListener('click', () => {     // the tap/click is the audio-unblock gesture
   initAudio();
   if (TOUCH) enterGame(); else controls.lock();
 });
 controls.addEventListener('lock', enterGame);
-controls.addEventListener('unlock', () => {
-  play.style.display = 'flex';
-  crosshair.style.display = 'none';
-  fadeAmbient(0.18);                          // duck the hillside while paused
-});
+controls.addEventListener('unlock', () => { if (started) showPause(); });   // Esc → pause, not the raw enter screen
+window.__showPause = showPause;              // test hook: headless can't drive a real Esc/pointer-unlock
 
 // ---- touch controls: left-thumb analog stick (move + push-to-sprint), right-side look ----
 const _euler = new THREE.Euler(0, 0, 0, 'YXZ'), PI2 = Math.PI / 2;
@@ -975,6 +1030,7 @@ if (TOUCH) {
   const knob = document.getElementById('stickKnob');
   const pip = document.getElementById('sprintPip');
   const btnJump = document.getElementById('btnJump');
+  const btnPause = document.getElementById('btnPause');
   const R = 52, SPR = 1.32;                   // knob radius (px); push past SPR×R to sprint
   let stickId = null, ox = 0, oy = 0;         // active stick touch + its dynamic origin
   let lookId = null, lx = 0, ly = 0;
@@ -1003,6 +1059,12 @@ if (TOUCH) {
     wantJump = true; btnJump.classList.add('press');
   }, { passive: false });
   btnJump.addEventListener('touchend', e => { e.preventDefault(); btnJump.classList.remove('press'); }, { passive: false });
+
+  btnPause.addEventListener('touchstart', e => {   // no Esc on phones — this is the pause affordance
+    e.preventDefault(); e.stopPropagation();
+    btnPause.classList.add('press'); resetStick(); showPause();
+  }, { passive: false });
+  btnPause.addEventListener('touchend', e => { e.preventDefault(); btnPause.classList.remove('press'); }, { passive: false });
 
   addEventListener('touchstart', e => {
     initAudio();                               // first touch also unblocks audio
