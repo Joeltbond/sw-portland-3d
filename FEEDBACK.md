@@ -13,12 +13,17 @@ normal backlog.
 
 ## Pending
 
-- 2026-06-12 — "The Douglas firs need to be much bigger." The forest trees read
-  too small/shrub-like; scale up the conifers (and the mixed canopy generally) so
-  mature firs tower the way real Council Crest old-growth does. Bump trunk height
-  + crown size meaningfully, not a token nudge.
+_(empty)_
 
 ## Handled
+
+- 2026-06-12 — "The Douglas firs need to be much bigger." → rebuilt the conifer
+  geometry from shrub-scale (~7 m crown top) to old-growth: fir crown now stacks
+  to ~17 m on a tall, visible 8 m bare lower trunk (was 1.8 m), cedar to ~15 m,
+  maple to ~17 m, and the per-instance scale floor was raised (0.85–1.55) so a
+  typical fir reaches ~22 m — ~12× the 1.8 m player. Sway coefficients softened
+  so the taller tips drift gently instead of over-swinging. `fps-firs-edge.png`
+  shows them towering against Mt Hood. (#25)
 
 - 2026-06-12 — "Weird seam where the two ends of the background backdrop meet." →
   the painted panorama's ridgelines + glow already tiled (integer-harmonic sine

@@ -59,6 +59,28 @@ harnesses now point there). shoot-fps.js loads `index.html`. New game work happe
   hill. NOT YET DONE — do this before trees/landmarks; record refs used here.
 
 ## Iteration log
+- **#25 (2026-06-12, Joel-directed via FEEDBACK.md)** FIRS MUCH BIGGER — Joel (Slack): "The
+  Douglas firs need to be much bigger… mature firs tower the way real Council Crest old-growth
+  does. Bump trunk height + crown size meaningfully, not a token nudge." The forest had been
+  reading shrub-like: the fir crown topped out at y≈7.15 m on a 1.8 m trunk, ×~1.1 instance scale
+  ≈ 8 m — barely 4× the 1.8 m player. Rebuilt all three species to old-growth scale (real Douglas-
+  firs are 40–70 m): **(0) fir** 4 stacked cones rising to y≈18.9 m (was 3 cones to ~7.15) on a
+  **tall 8 m visible bare lower trunk** (CylinderGeometry 0.42→0.85 r, was 1.8 m / 0.18→0.30) — so
+  the conical crown starts well overhead and the bole reads from below the way real firs do; **(1)
+  cedar** 4 cones to y≈16.9 m, broader/fuller, a touch shorter; **(2) bigleaf maple** crown blobs
+  raised to y≈11–14 (rad up to 5 m) on a 9 m trunk. Per-instance scale floor raised **0.72–1.52 →
+  0.85–1.55**, so a typical instance (×~1.2) now reaches **~22 m ≈ 12× the player** and the biggest
+  hit ~29 m. Sway coefficients **softened 0.035/0.028 → 0.022/0.018** because the height-weighted
+  sway (`max(position.y−1,0)`, now reaching ~17) would otherwise over-swing the tall tips — big
+  firs barely move at the base, crowns drift gently. No count/placement change (TREES still 11923,
+  grass 4670, all landmarks true, FOV/edge/pause intact, all 17 views render, no page/console
+  errors). New harness `test/shoot-firs.js` shoots `fps-firs-edge.png` / `fps-firs-up.png` from the
+  north lawn edge looking into the ring — the firs now TOWER with bare trunks against Mt Hood; the
+  summit-down shot shows them ringing the plaza at real scale. Gotcha: the old fixed test view
+  coords (`fps-slope`) were chosen for the small trees, so that camera now sits *inside* a trunk
+  (brown fills the frame) — harmless test-framing artifact, not a page bug; use the edge/summit-down
+  / firs shots to judge. Possible polish: thin the canopy slightly now that each tree is bigger;
+  taper trunk bark texture; a few even-taller emergent firs breaking the canopy line.
 - **#24 (2026-06-12)** DRIFTING CUMULUS SKY — the largest screen area, the bare blue gradient
   sky dome, was the last empty surface: the Mt Hood hero shot had nothing above the peaks. Added a
   summer-cumulus cloud layer (`makeClouds()`): scattered puffy clouds painted onto a TRANSPARENT
