@@ -29,7 +29,39 @@ a game. Scope it to just Council Crest. Move away from the map paradigm complete
 - **Satellite imagery:** Esri World Imagery draped on the hill — landed in #5; reads
   far more like a real place than the cartographic ground. Keep it.
 
+## Engine note (2026-06-12 ~17:15) — ENGINE PIVOT to three.js (authorized)
+MapLibre capped out: it drives the camera with `jumpTo` per frame and at the grazing
+eye-level FP angle the satellite drape smears into vertical streaks (a broken "wall"
+in the foreground — see the old `fp-fly-council.png`). Joel kept reading it as
+"google-map-y." Per the ENGINE CALL we built the level natively in three.js as
+**`fps.html`** (linked from index.html; promote to index once it clearly wins). Both
+pages stay live for now. New work happens in fps.html unless it's a MapLibre-only fix.
+
+three.js verify harness: `node test/shoot-fps.js` (waits `window.__fpsReady`, calls
+`window.__look(lng,lat,heading,pitch)`, screenshots). Physics is rAF-throttled under
+headless (dt capped at 0.05 → slow-motion), so verify movement via the fixed-timestep
+hooks instead: `window.__pauseSim=true; window.__step(1/60)` in a loop, read
+`window.__player` / `window.__groundY()`. Self-contained: three@0.160 via importmap CDN.
+
 ## Iteration log
+- **#6 (17:05–17:18)** ENGINE PIVOT — built `fps.html`, a native three.js Council
+  Crest level (slice 1: terrain mesh + satellite drape + real FPS physics). **Terrain:**
+  stitch the same AWS terrarium DEM tiles (z14) onto a canvas, bilinear-decode elevation
+  (`r*256+g+b/256-32768`) and displace a 320×320 `PlaneGeometry` over a 1.9 km box centered
+  on the summit; per-vertex UV mapped to a stitched **Esri World Imagery z17** canvas texture
+  (`flipY=false` since canvas px are top-left origin; `anisotropy=maxAnisotropy` — this is
+  what kills MapLibre's grazing-angle smear). **World:** gradient sky dome (ShaderMaterial,
+  blue zenith→warm horizon) + linear fog to the same horizon haze; ambient+hemisphere fill
+  bright (satellite already has baked sun/shadow — heavy directional crushed slopes to black,
+  so directional is only 0.55 for form). **Physics:** PointerLockControls look; WASD with
+  momentum (exp-approach accel, less in air); gravity 20 + jump 6.6 (~1m arc) + ground-clamp
+  by sampling the in-memory DEM (`groundAt`); Shift sprint 1.85×; subtle head bob; soft
+  radial boundary clamp. Verified (fixed-timestep): spawn eye exactly ground+1.7, walk
+  4.3 m/s / sprint 8.2 m/s, jump peaks 1.03 m and lands onGround. Gotchas: (a) AWS DEM + Esri
+  imagery BOTH send CORS `*`, so `crossOrigin='anonymous'` canvas readback works from
+  `file://`; (b) headless never locks the pointer → the test must hide `#play` to reveal the
+  world; (c) z17 over the box ≈ 70 imagery tiles — fine (~17 s build under swiftshader), don't
+  push zoom much higher. Reads as a real continuous forested hill now, not a streaked map.
 - **#5 (16:57–17:02)** De-map the ground — the two biggest anti-map moves, landed
   together. (1) **Satellite drape:** Esri World Imagery raster (keyless,
   `server.arcgisonline.com/.../World_Imagery/MapServer/tile/{z}/{y}/{x}` — note Esri
@@ -98,27 +130,24 @@ a game. Scope it to just Council Crest. Move away from the map paradigm complete
   Shift sprint + T walk/fly + Esc exit; touch: left half = move stick, right half = look.
   FOV 60° in FP, 36.87° (default) in orbit. Test hooks: `__fpEnter/__fpExit/__fp`.
 
-## Next ideas (Council Crest game level — priority order)
-1. **Rip out the map paradigm wiring** — remove orbit/map mode + the Esc-to-map hatch
-   (Esc → pause/help instead), delete the citywide "Travel to: …" neighborhood links
-   from the HUD, and replace the citywide NEIGHBORHOODS centroids with ON-HILL spots
-   (Summit, radio towers, Marquam trailhead) for the zone chip/toast. The HUD still
-   shows SW-Portland-wide chrome — that contradicts the Council-Crest scope.
-2. **Soft world boundary** — keep the player on the hill (~1–1.5 km from the summit):
-   thickening fog + gentle push-back + a "turn back" cue as you near the edge. Makes it
-   a level, not an open map.
-3. **Trees / forest** — Council Crest + Marquam slopes are dense Douglas-fir. OSM
-   park/landcover/`landuse=forest` polygons → instanced billboard trees or extruded
-   canopy blobs. The satellite shows canopy from above; eye-level needs actual 3D trees
-   to feel forested.
-4. **Game-feel movement** — gravity + jump (Space in walk), acceleration/momentum
-   instead of instant velocity, subtle head bob. Movement is currently instant-on/off
-   and dead-flat — reads robotic.
-5. **Tame the foreground satellite smear** — at eye level the near-ground texture
-   stretches. Options: bump terrain tile detail, a subtle near-ground color/detail
-   overlay, or a depth-of-field/vignette so the eye reads distance not blur.
-6. **FP collision with buildings** — queryRenderedFeatures ahead before moving so you
-   can't walk through walls (physicality = game-feel).
-7. **Summit landmarks** — the actual Council Crest stone compass/overlook + the twin
-   broadcast towers as recognizable geometry; a real "you are here" anchor.
-8. Mobile: visible joystick widget, fullscreen button, deviceorientation look.
+## Next ideas (three.js fps.html is now the main track — priority order)
+1. **Trees / forest** — the single biggest "real place" win. The satellite drape shows
+   canopy from above but eye-level reads as smooth green ground. Instance Douglas-fir
+   billboards/low-poly cones from OSM `landuse=forest`/`natural=wood` polygons (or just
+   scatter on terrain where the texture is green), density-faded with distance. This is
+   what makes the hill feel forested instead of a textured blob.
+2. **Sharpen the near foreground** — even at z17 the immediate ground under the eye is
+   soft (grazing-angle minification). Options: a tiling detail/noise texture blended in
+   near the camera, a ground normal map, or a subtle near vignette so the eye reads it
+   as distance not blur. Trees (#1) will mostly hide this.
+3. **Summit landmarks** — the Council Crest stone compass/overlook + the twin broadcast
+   towers as real geometry; a "you are here" anchor that orients the player.
+4. **Boundary feel** — current edge is a silent radial clamp. Add thickening fog + a
+   "turn back" cue + gentler push so the level edge reads intentional.
+5. **Touch controls for fps.html** — joystick + look drag + a tap-to-jump, plus a
+   fullscreen button; PointerLock is desktop-only.
+6. **Pause/help overlay on Esc** (beyond the click-to-enter), minimap-free.
+7. **Promote fps.html → index.html** once trees + landmarks land and it clearly beats
+   the MapLibre page; then retire the MapLibre build (keep its NOTES learnings).
+8. **Perf**: the DEM/imagery refetch on every load; consider caching or a lower first-paint
+   then upgrade. Build is ~17 s under swiftshader, faster on real bandwidth.

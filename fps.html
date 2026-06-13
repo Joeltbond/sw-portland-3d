@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Council Crest — first person</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #1a2230; }
+    canvas { display: block; }
+    #ui { position: absolute; inset: 0; pointer-events: none; font: 14px/1.5 -apple-system, system-ui, sans-serif; color: #eaf0f4; }
+    #crosshair {
+      position: absolute; left: 50%; top: 50%; width: 5px; height: 5px;
+      margin: -2.5px 0 0 -2.5px; border-radius: 50%;
+      background: rgba(255,255,255,.7); box-shadow: 0 0 4px rgba(0,0,0,.7);
+    }
+    #spot {
+      position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+      padding: 5px 16px; border-radius: 14px; background: rgba(15,18,22,.42);
+      border: 1px solid rgba(255,255,255,.14); font-weight: 600; font-size: 12px;
+      letter-spacing: .14em; text-transform: uppercase;
+      -webkit-backdrop-filter: blur(7px); backdrop-filter: blur(7px);
+    }
+    #loading {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      background: #141b27; color: #aebccb; font-size: 15px; letter-spacing: .04em;
+    }
+    #play {
+      position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+      background: rgba(8,12,18,.55); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+      pointer-events: auto; cursor: pointer; flex-direction: column;
+    }
+    #play .title { font: 200 40px/1.1 -apple-system, system-ui, sans-serif; color: #fff; }
+    #play .sub { margin-top: 16px; color: #cdd8e2; font-size: 14px; text-align: center; }
+    #play kbd {
+      background: rgba(255,255,255,.14); border-radius: 4px; padding: 1px 6px;
+      font-family: inherit; font-weight: 600;
+    }
+    #attr {
+      position: absolute; right: 6px; bottom: 5px; font-size: 10px; color: rgba(255,255,255,.55);
+      text-shadow: 0 1px 2px rgba(0,0,0,.6);
+    }
+  </style>
+</head>
+<body>
+<div id="ui">
+  <div id="crosshair" style="display:none"></div>
+  <div id="spot" style="display:none">◈ Council Crest Summit</div>
+  <div id="attr">Terrain: Mapzen/AWS · Imagery © Esri, Maxar, Earthstar</div>
+</div>
+<div id="loading">building Council Crest…</div>
+<div id="play">
+  <div class="title">Council Crest</div>
+  <div class="sub">
+    <kbd>W A S D</kbd> move · <kbd>Shift</kbd> sprint · <kbd>Space</kbd> jump · <kbd>mouse</kbd> look · <kbd>Esc</kbd> release<br/><br/>
+    click to enter
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+}}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+
+// ---- the level: Council Crest, Portland's high point ----
+const LNG0 = -122.7076, LAT0 = 45.4983;   // summit
+const HALF = 950;                           // half-extent of the level (m) — ~1.9 km square
+const BOUND = 860;                          // soft boundary radius (m)
+const EXAG = 1.25;                          // vertical exaggeration — make the hill read
+const EYE = 1.7;                            // eye height (m)
+const DEM_Z = 14, SAT_Z = 17;               // z17 imagery (~1m/px) keeps the foreground sharp
+const cosLat0 = Math.cos(LAT0 * Math.PI / 180);
+const dLng = HALF / (111320 * cosLat0);
+const dLat = HALF / 111320;
+
+// ---- renderer / scene / camera ----
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const HORIZON = new THREE.Color('#ddd0bb');     // warm haze the distance dissolves into
+scene.fog = new THREE.Fog(HORIZON, 350, 1850);
+
+const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 6000);
+
+// gradient sky dome (deep blue zenith → warm horizon), matches the MapLibre build's mood
+const skyGeo = new THREE.SphereGeometry(4000, 32, 16);
+const skyMat = new THREE.ShaderMaterial({
+  side: THREE.BackSide, depthWrite: false, fog: false,
+  uniforms: { top: { value: new THREE.Color('#2f6cb3') }, bot: { value: HORIZON } },
+  vertexShader: `varying float h; void main(){ h = normalize(position).y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: `varying float h; uniform vec3 top; uniform vec3 bot;
+    void main(){ float t = clamp(smoothstep(-0.05, 0.55, h), 0.0, 1.0); gl_FragColor = vec4(mix(bot, top, t), 1.0); }`
+});
+scene.add(new THREE.Mesh(skyGeo, skyMat));
+
+// Lighting for a satellite-draped hill: the imagery already carries baked sun and
+// shadow, so keep a bright flat fill (ambient + hemisphere) and add only a gentle
+// directional for form — otherwise slopes facing away from the sun crush to black.
+scene.add(new THREE.AmbientLight('#ffffff', 0.85));
+scene.add(new THREE.HemisphereLight('#d6e6f5', '#9c8f76', 1.1));
+const sun = new THREE.DirectionalLight('#ffe9c6', 0.55);
+sun.position.set(-0.8, 0.55, -0.6).multiplyScalar(1000);   // low, from the southwest
+scene.add(sun);
+
+// ---- tile math (Web Mercator slippy) ----
+const TAU = Math.PI;
+function tileXY(lng, lat, z) {
+  const n = 2 ** z, latRad = lat * Math.PI / 180;
+  return [Math.floor((lng + 180) / 360 * n),
+          Math.floor((1 - Math.asinh(Math.tan(latRad)) / TAU) / 2 * n)];
+}
+function lnglatToPx(lng, lat, T) {
+  const n = 2 ** T.z, latRad = lat * Math.PI / 180;
+  const gx = (lng + 180) / 360 * n;
+  const gy = (1 - Math.asinh(Math.tan(latRad)) / TAU) / 2 * n;
+  return [(gx - T.txmin) * 256, (gy - T.tymin) * 256];
+}
+function loadImg(url) {
+  return new Promise((res, rej) => {
+    const im = new Image(); im.crossOrigin = 'anonymous';
+    im.onload = () => res(im); im.onerror = () => rej(new Error('tile ' + url));
+    im.src = url;
+  });
+}
+// fetch a tile grid covering the bbox, stitch onto one canvas, return canvas + mapping
+async function fetchGrid(z, urlFor) {
+  const c = [tileXY(LNG0 - dLng, LAT0 + dLat, z), tileXY(LNG0 + dLng, LAT0 - dLat, z)];
+  const txmin = Math.min(c[0][0], c[1][0]), txmax = Math.max(c[0][0], c[1][0]);
+  const tymin = Math.min(c[0][1], c[1][1]), tymax = Math.max(c[0][1], c[1][1]);
+  const w = (txmax - txmin + 1) * 256, h = (tymax - tymin + 1) * 256;
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  const ctx = cv.getContext('2d', { willReadFrequently: true });
+  const jobs = [];
+  for (let tx = txmin; tx <= txmax; tx++)
+    for (let ty = tymin; ty <= tymax; ty++)
+      jobs.push(loadImg(urlFor(z, tx, ty)).then(im => ctx.drawImage(im, (tx - txmin) * 256, (ty - tymin) * 256)));
+  await Promise.all(jobs);
+  return { cv, ctx, w, h, z, txmin, tymin };
+}
+
+const demUrl = (z, x, y) => `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`;
+const satUrl = (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`; // Esri is {z}/{y}/{x}
+
+// ---- elevation sampling (bilinear over the stitched DEM) ----
+let DEM, DEMDATA;
+function demSample(lng, lat) {
+  const [px, py] = lnglatToPx(lng, lat, DEM);
+  const w = DEM.w, h = DEM.h;
+  let x0 = Math.floor(px), y0 = Math.floor(py);
+  const fx = px - x0, fy = py - y0;
+  x0 = Math.max(0, Math.min(w - 2, x0)); y0 = Math.max(0, Math.min(h - 2, y0));
+  const at = (x, y) => { const i = (y * w + x) * 4; return DEMDATA[i] * 256 + DEMDATA[i + 1] + DEMDATA[i + 2] / 256 - 32768; };
+  const a = at(x0, y0), b = at(x0 + 1, y0), c = at(x0, y0 + 1), d = at(x0 + 1, y0 + 1);
+  return (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy;
+}
+// world ENU ↔ lng/lat
+const eastOf = lng => (lng - LNG0) * 111320 * cosLat0;
+const northOf = lat => (lat - LAT0) * 111320;
+const lngOf = east => LNG0 + east / (111320 * cosLat0);
+const latOf = north => LAT0 + north / 111320;
+// ground elevation at a world (x=east, z=-north) point
+const groundAt = (x, z) => demSample(lngOf(x), latOf(-z)) * EXAG;
+
+// ---- build everything ----
+let SAT, ready = false;
+async function build() {
+  [DEM, SAT] = await Promise.all([fetchGrid(DEM_Z, demUrl), fetchGrid(SAT_Z, satUrl)]);
+  DEMDATA = DEM.ctx.getImageData(0, 0, DEM.w, DEM.h).data;
+
+  const tex = new THREE.CanvasTexture(SAT.cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.flipY = false;                                   // canvas px coords are top-left origin
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();  // kills the grazing-angle smear
+  tex.needsUpdate = true;
+
+  // terrain mesh: a regular grid over the bbox, displaced by the DEM, UV'd to the imagery
+  const N = 320, verts = N + 1;
+  const geo = new THREE.PlaneGeometry(2 * HALF, 2 * HALF, N, N);
+  const pos = geo.attributes.position, uv = geo.attributes.uv;
+  for (let i = 0; i < pos.count; i++) {
+    const east = pos.getX(i);             // PlaneGeometry x ∈ [-HALF, HALF]
+    const north = pos.getY(i);            // PlaneGeometry y ∈ [-HALF, HALF] (before rotation)
+    const lng = lngOf(east), lat = latOf(north);
+    pos.setZ(i, demSample(lng, lat) * EXAG);
+    const [sx, sy] = lnglatToPx(lng, lat, SAT);
+    uv.setXY(i, Math.max(0, Math.min(1, sx / SAT.w)), Math.max(0, Math.min(1, sy / SAT.h)));
+  }
+  geo.rotateX(-Math.PI / 2);              // lay flat: plane y → world z (north → -z)
+  geo.computeVertexNormals();
+  const mat = new THREE.MeshLambertMaterial({ map: tex });
+  scene.add(new THREE.Mesh(geo, mat));
+
+  // spawn on the summit
+  teleport(LNG0, LAT0, 40, -6);
+  ready = true; window.__fpsReady = true;
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('play').style.display = 'flex';
+}
+
+// ---- player + controls ----
+const controls = new PointerLockControls(camera, renderer.domElement);
+const player = { x: 0, y: 400, z: 0, vx: 0, vy: 0, vz: 0, onGround: false, bob: 0 };
+const keys = new Set();
+let wantJump = false;
+const G = 20, JUMP = 6.6, WALK = 4.6, SPRINT = 1.85, ACCEL_G = 11, ACCEL_A = 2.5;
+
+function teleport(lng, lat, headingDeg, pitchDeg = 0) {
+  player.x = eastOf(lng); player.z = -northOf(lat);
+  player.y = groundAt(player.x, player.z) + EYE;
+  player.vx = player.vy = player.vz = 0; player.onGround = true;
+  const h = headingDeg * Math.PI / 180, p = (pitchDeg || 0) * Math.PI / 180;
+  camera.position.set(player.x, player.y, player.z);
+  camera.lookAt(
+    player.x + Math.sin(h) * Math.cos(p),
+    player.y + Math.sin(p),
+    player.z - Math.cos(h) * Math.cos(p)
+  );
+}
+
+const play = document.getElementById('play');
+play.addEventListener('click', () => controls.lock());
+controls.addEventListener('lock', () => {
+  play.style.display = 'none';
+  document.getElementById('crosshair').style.display = 'block';
+  document.getElementById('spot').style.display = 'block';
+});
+controls.addEventListener('unlock', () => {
+  play.style.display = 'flex';
+  document.getElementById('crosshair').style.display = 'none';
+});
+
+addEventListener('keydown', e => {
+  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  keys.add(k);
+  if (k === 'Shift') keys.add('shift');
+  if (k === ' ') { wantJump = true; e.preventDefault(); }
+});
+addEventListener('keyup', e => {
+  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  keys.delete(k);
+  if (k === 'Shift') keys.delete('shift');
+});
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ---- physics + render loop ----
+const fwd = new THREE.Vector3(), right = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+const clock = new THREE.Clock();
+
+function step(dt) {
+  // movement direction in camera-yaw space (flattened)
+  camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
+  right.crossVectors(fwd, up).normalize();
+  let mx = 0, mz = 0;
+  const f = (keys.has('w') ? 1 : 0) - (keys.has('s') ? 1 : 0);
+  const s = (keys.has('d') ? 1 : 0) - (keys.has('a') ? 1 : 0);
+  mx = fwd.x * f + right.x * s; mz = fwd.z * f + right.z * s;
+  const ml = Math.hypot(mx, mz); if (ml > 0) { mx /= ml; mz /= ml; }
+
+  const speed = WALK * (keys.has('shift') ? SPRINT : 1);
+  const accel = player.onGround ? ACCEL_G : ACCEL_A;       // momentum on the ground, drift in the air
+  const k = Math.min(1, accel * dt);
+  player.vx += (mx * speed - player.vx) * k;
+  player.vz += (mz * speed - player.vz) * k;
+
+  player.x += player.vx * dt; player.z += player.vz * dt;
+
+  // soft boundary — gently arrest motion past the level edge
+  const r = Math.hypot(player.x, player.z);
+  if (r > BOUND) {
+    const s2 = BOUND / r; player.x *= s2; player.z *= s2;
+    player.vx *= 0.3; player.vz *= 0.3;
+  }
+
+  // gravity + ground
+  if (wantJump && player.onGround) { player.vy = JUMP; player.onGround = false; }
+  wantJump = false;
+  player.vy -= G * dt; player.y += player.vy * dt;
+  const ground = groundAt(player.x, player.z) + EYE;
+  if (player.y <= ground) { player.y = ground; player.vy = 0; player.onGround = true; }
+  else player.onGround = false;
+
+  // subtle head bob when walking on the ground
+  const hsp = Math.hypot(player.vx, player.vz);
+  let bobY = 0;
+  if (player.onGround && hsp > 0.3) {
+    player.bob += hsp * dt * 1.9;
+    bobY = Math.sin(player.bob) * 0.045 * Math.min(1, hsp / WALK);
+  }
+  camera.position.set(player.x, player.y + bobY, player.z);
+}
+
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  if (ready && !window.__pauseSim) step(dt);
+  renderer.render(scene, camera);
+});
+
+// ---- test hooks (headless screenshot + physics harness) ----
+window.__look = (lng, lat, heading, pitch) => teleport(lng, lat, heading, pitch);
+window.__player = player;
+window.__key = (k, down) => { if (down) keys.add(k); else keys.delete(k); };
+window.__jump = () => { wantJump = true; };
+window.__groundY = () => groundAt(player.x, player.z) + EYE;
+window.__step = (dt) => step(dt);       // fixed-timestep drive for deterministic physics tests
+window.__pauseSim = false;
+window.__fpsReady = false;
+
+build().catch(e => {
+  document.getElementById('loading').textContent = 'failed to build: ' + e.message;
+  console.error(e);
+});
+</script>
+</body>
+</html>
