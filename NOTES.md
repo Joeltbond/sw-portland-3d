@@ -43,6 +43,11 @@ headless (dt capped at 0.05 → slow-motion), so verify movement via the fixed-t
 hooks instead: `window.__pauseSim=true; window.__step(1/60)` in a loop, read
 `window.__player` / `window.__groundY()`. Self-contained: three@0.160 via importmap CDN.
 
+**PROMOTED in #16:** the three.js level is now `index.html` (the canonical live URL).
+The old MapLibre build is retired to `maplibre-legacy.html` (its shoot-fp.js / shoot.js
+harnesses now point there). shoot-fps.js loads `index.html`. New game work happens in
+`index.html`; `maplibre-legacy.html` is dead and only kept for its NOTES learnings.
+
 ## Joel's new asks (2026-06-12 17:20) — both first-class until done
 - **SOUND** — "Add sounds. Bugs, footsteps." → **LANDED in #7** (footsteps tied to
   stride cadence + insect/bird/wind ambient bed, all procedural Web Audio). Needs Joel's
@@ -54,6 +59,24 @@ hooks instead: `window.__pauseSim=true; window.__step(1/60)` in a loop, read
   hill. NOT YET DONE — do this before trees/landmarks; record refs used here.
 
 ## Iteration log
+- **#16 (19:05–19:14)** PROMOTE TO index.html — the gated milestone (backlog #7). Every
+  precondition was met: forest (#10), summit landmarks + fountain (#11/#13), illustrated
+  backdrop (#9), near-ground detail (#12), boundary feel (#15), sound (#7), mobile (#8),
+  sprint FOV (#14) — fps.html clearly beat the MapLibre page. The problem this fixes: the
+  CANONICAL live URL (joel.computer/sw-portland-3d/) still served the MapLibre map, so Joel's
+  phone review landed on the very "google-map-y" page he keeps rejecting and had to tap
+  through to fps.html. Now `git mv index.html maplibre-legacy.html` + `git mv fps.html
+  index.html` → the three.js Council Crest level IS the default experience; the map is
+  retired (kept only as `maplibre-legacy.html` for its learnings). Updated the three harnesses
+  to match: shoot-fps.js → `index.html`; shoot-fp.js + shoot.js (MapLibre-only) →
+  `maplibre-legacy.html`. README rewritten from "interactive 3D map" to the walking-sim. No
+  code changes to the level itself — pure promotion. Verified headless (shoot-fps.js against
+  the moved index.html, exit 0): audio running @48k, 11767 trees, summit/fountain true, FOV
+  kick + edge falloff intact, all 11 views render; `fps-hood.png` (Hood hero over the plaza
+  terrace) and `fps-plaza.png` (compass-rose deck) confirm nothing regressed in the move.
+  Gotcha: fps.html had NO back-link to index (the only index→fps link lived in the MapLibre
+  page being replaced), so the swap is clean; the test PAGE paths were the only references
+  that needed fixing. **New work from here lands in `index.html`, not fps.html.**
 - **#15 (19:18–19:32)** BOUNDARY FEEL — the last untouched game-feel item (backlog #4). The
   level edge was a SILENT hard radial clamp at `BOUND 860` (snap-back + 0.3× velocity) — an
   invisible wall, the classic immersion tell. Now the park edge reads intentional across a 160 m
@@ -314,7 +337,7 @@ hooks instead: `window.__pauseSim=true; window.__step(1/60)` in a loop, read
   Shift sprint + T walk/fly + Esc exit; touch: left half = move stick, right half = look.
   FOV 60° in FP, 36.87° (default) in orbit. Test hooks: `__fpEnter/__fpExit/__fp`.
 
-## Next ideas (three.js fps.html is now the main track — priority order)
+## Next ideas (three.js `index.html` is now the main track — priority order)
 *Movement-feel checklist from Joel's "FPS without shooting" bar is now COMPLETE: accel/momentum
 (#6), gravity+jump (#6), sprint (#6), sprint FOV kick (#14), head bob (#6), pointer-lock look (#6).
 Remaining work is world richness + the boundary/pause polish below.*
@@ -358,8 +381,13 @@ Remaining work is world richness + the boundary/pause polish below.*
    text to the actual nearest in-park landmark; a subtle low audio cue at the rim.
 5. ~~**Touch controls for fps.html**~~ — DONE in #8 (analog stick + look drag + jump,
    capability-gated). Still open: a fullscreen button, and Joel-confirmed feel/sensitivity.
-6. **Pause/help overlay on Esc** (beyond the click-to-enter), minimap-free.
-7. **Promote fps.html → index.html** once trees + landmarks land and it clearly beats
-   the MapLibre page; then retire the MapLibre build (keep its NOTES learnings).
+6. **Pause/help overlay on Esc** (beyond the click-to-enter), minimap-free — a real
+   game-feel touch; Esc currently just ducks audio + releases the cursor.
+7. ~~**Promote fps.html → index.html**~~ — DONE in #16 (three.js level is now the canonical
+   URL; MapLibre retired to maplibre-legacy.html). Possible follow-up: delete maplibre-legacy
+   .html + its harnesses entirely once Joel's sure he wants no map fallback at all.
 8. **Perf**: the DEM/imagery refetch on every load; consider caching or a lower first-paint
    then upgrade. Build is ~17 s under swiftshader, faster on real bandwidth.
+9. **Foliage / world polish** (the deepest remaining "real place" wins): vary tree species
+   (broadleaf/cedar shapes), soft wind sway, soften the near-black shaded cone sides;
+   wind-stirred grass billboards on the summit lawn; jetting fountain water + patina.

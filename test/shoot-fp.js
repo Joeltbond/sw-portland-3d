@@ -1,6 +1,6 @@
 const puppeteer = require('puppeteer-core');
 
-const PAGE = process.env.PAGE || 'file://' + __dirname + '/../index.html';
+const PAGE = process.env.PAGE || 'file://' + __dirname + '/../maplibre-legacy.html';
 const OUT = process.env.OUT || __dirname + '/';
 // [file, lng, lat, heading, look, mode]
 const VIEWS = [

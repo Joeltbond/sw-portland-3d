@@ -1,6 +1,6 @@
 const puppeteer = require('puppeteer-core');
 
-const PAGE = process.env.PAGE || 'file://' + __dirname + '/../fps.html';
+const PAGE = process.env.PAGE || 'file://' + __dirname + '/../index.html';
 const OUT = process.env.OUT || __dirname + '/';
 // [file, lng, lat, heading, pitch]
 const VIEWS = [

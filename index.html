@@ -2,477 +2,1105 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>SW Portland — 3D</title>
+  <title>Council Crest — first person</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <script src="https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.js"></script>
-  <link href="https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.css" rel="stylesheet" />
   <style>
-    html, body { margin: 0; height: 100%; overflow: hidden; }
-    #map { height: 100%; }
-    #hud {
-      position: absolute; top: 10px; left: 10px; z-index: 2;
-      background: rgba(20,20,20,.78); color: #eee; padding: 8px 12px;
-      font: 13px/1.5 -apple-system, system-ui, sans-serif; border-radius: 6px;
-      max-width: 300px;
-    }
-    #hud b { color: #fff; }
-    .spot { cursor: pointer; color: #8cf; }
-    .spot:hover { text-decoration: underline; }
-    #fp-bar { margin-top: 6px; }
-    #fp-bar button {
-      background: #2e6da4; color: #fff; border: 0; border-radius: 4px;
-      padding: 5px 10px; font: 13px -apple-system, system-ui, sans-serif; cursor: pointer;
-    }
-    #fp-bar button:hover { background: #3b82c4; }
-    #fp-help { display: none; margin-top: 6px; color: #cdd; font-size: 12px; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #1a2230;
+      touch-action: none; overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
+    canvas { display: block; }
+    #ui { position: absolute; inset: 0; pointer-events: none; font: 14px/1.5 -apple-system, system-ui, sans-serif; color: #eaf0f4; }
     #crosshair {
-      display: none; position: absolute; left: 50%; top: 50%; z-index: 2;
-      width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%;
-      background: rgba(255,255,255,.7); box-shadow: 0 0 4px rgba(0,0,0,.6);
-      pointer-events: none;
+      position: absolute; left: 50%; top: 50%; width: 5px; height: 5px;
+      margin: -2.5px 0 0 -2.5px; border-radius: 50%;
+      background: rgba(255,255,255,.7); box-shadow: 0 0 4px rgba(0,0,0,.7);
     }
-    /* persistent zone chip (current neighborhood) + transient arrival toast */
-    #zone-chip {
-      display: none; position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
-      z-index: 3; padding: 5px 15px; border-radius: 14px;
-      background: rgba(15,18,22,.5); color: #e4ecf2;
-      font: 600 12px/1.2 -apple-system, system-ui, sans-serif; letter-spacing: .12em;
-      text-transform: uppercase; border: 1px solid rgba(255,255,255,.14);
+    #spot {
+      position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+      padding: 5px 16px; border-radius: 14px; background: rgba(15,18,22,.42);
+      border: 1px solid rgba(255,255,255,.14); font-weight: 600; font-size: 12px;
+      letter-spacing: .14em; text-transform: uppercase;
       -webkit-backdrop-filter: blur(7px); backdrop-filter: blur(7px);
-      pointer-events: none; white-space: nowrap;
     }
-    #zone-toast {
-      display: none; position: absolute; top: 33%; left: 50%; transform: translateX(-50%);
-      z-index: 3; text-align: center; pointer-events: none;
-      text-shadow: 0 2px 16px rgba(0,0,0,.75);
+    #vignette {
+      position: absolute; inset: 0; pointer-events: none; opacity: 0;
+      background: radial-gradient(ellipse 72% 72% at center, transparent 38%, rgba(20,26,34,.86) 100%);
+      mix-blend-mode: multiply;
     }
-    #zone-toast .lead {
-      color: #b6c0c8; font: 600 12px/1 -apple-system, system-ui, sans-serif;
-      letter-spacing: .42em; text-transform: uppercase;
+    #edgeCue {
+      position: absolute; left: 50%; bottom: 22%; transform: translateX(-50%);
+      padding: 7px 18px; border-radius: 14px; background: rgba(15,18,22,.5);
+      border: 1px solid rgba(255,180,120,.42); color: #ffd9b0;
+      font-weight: 600; font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+      white-space: nowrap; opacity: 0; transition: opacity .22s;
+      -webkit-backdrop-filter: blur(7px); backdrop-filter: blur(7px);
     }
-    #zone-toast .name {
-      color: #fff; font: 200 46px/1.1 -apple-system, system-ui, sans-serif;
-      letter-spacing: .01em; margin-top: 10px;
+    #loading {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      background: #141b27; color: #aebccb; font-size: 15px; letter-spacing: .04em;
     }
-    #zone-toast.show { animation: zonepop 3.6s ease forwards; }
-    @keyframes zonepop {
-      0%   { opacity: 0; transform: translateX(-50%) translateY(12px); }
-      12%  { opacity: 1; transform: translateX(-50%) translateY(0); }
-      80%  { opacity: 1; transform: translateX(-50%) translateY(0); }
-      100% { opacity: 0; transform: translateX(-50%) translateY(-7px); }
+    #play {
+      position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+      background: rgba(8,12,18,.55); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+      pointer-events: auto; cursor: pointer; flex-direction: column;
     }
+    #play .title { font: 200 40px/1.1 -apple-system, system-ui, sans-serif; color: #fff; }
+    #play .sub { margin-top: 16px; color: #cdd8e2; font-size: 14px; text-align: center; }
+    #play kbd {
+      background: rgba(255,255,255,.14); border-radius: 4px; padding: 1px 6px;
+      font-family: inherit; font-weight: 600;
+    }
+    #attr {
+      position: absolute; right: 6px; bottom: 5px; font-size: 10px; color: rgba(255,255,255,.55);
+      text-shadow: 0 1px 2px rgba(0,0,0,.6);
+    }
+    /* ---- touch HUD (phones / coarse pointers only) ---- */
+    #touchHud { position: absolute; inset: 0; display: none; pointer-events: none; }
+    #stick {
+      position: absolute; left: 30px; bottom: 44px; width: 124px; height: 124px;
+      border-radius: 50%; border: 2px solid rgba(255,255,255,.30);
+      background: rgba(15,18,22,.20); opacity: .5; transition: opacity .14s;
+      -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+    }
+    #stick.live { opacity: .9; }
+    #stickKnob {
+      position: absolute; left: 50%; top: 50%; width: 54px; height: 54px;
+      margin: -27px 0 0 -27px; border-radius: 50%;
+      background: rgba(255,255,255,.46); box-shadow: 0 1px 7px rgba(0,0,0,.45);
+    }
+    #btnJump {
+      position: absolute; right: 32px; bottom: 52px; width: 86px; height: 86px;
+      border-radius: 50%; border: 1px solid rgba(255,255,255,.24);
+      background: rgba(15,18,22,.32); color: #eaf0f4; font-weight: 600; font-size: 13px;
+      letter-spacing: .12em; text-transform: uppercase; pointer-events: auto;
+      display: flex; align-items: center; justify-content: center;
+      user-select: none; -webkit-user-select: none;
+      -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px);
+    }
+    #btnJump.press { background: rgba(120,162,212,.5); }
+    #sprintPip {
+      position: absolute; left: 30px; bottom: 178px; width: 124px; text-align: center;
+      font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: #c4e2ff;
+      opacity: 0; transition: opacity .12s; text-shadow: 0 1px 2px rgba(0,0,0,.65);
+    }
+    #sprintPip.on { opacity: 1; }
   </style>
 </head>
 <body>
-<div id="map"></div>
-<div id="crosshair"></div>
-<div id="zone-chip"></div>
-<div id="zone-toast"><div class="lead">Now entering</div><div class="name"></div></div>
-<div id="hud">
-  <a href="fps.html" style="display:block;margin-bottom:7px;padding:6px 10px;border-radius:5px;
-     background:#1f6f43;color:#fff;text-decoration:none;font-weight:600;">
-     ▶ NEW: Council Crest — native 3D engine</a>
-  <b>Southwest Portland</b><br/>
-  <span id="orbit-help">Map view — drag to pan · right-drag to tilt · scroll to zoom.<br/></span>
-  Travel to:
-  <span class="spot" data-v="-122.6995,45.4992,14.5,60,210">OHSU / Marquam Hill</span> ·
-  <span class="spot" data-v="-122.7076,45.4983,14,55,150">Council Crest</span> ·
-  <span class="spot" data-v="-122.7095,45.4737,15,55,0">Hillsdale</span> ·
-  <span class="spot" data-v="-122.7126,45.4530,15.5,55,30">Multnomah Village</span> ·
-  <span class="spot" data-v="-122.6789,45.5085,15,60,330">Downtown south</span>
-  <div id="fp-bar">
-    <button id="fp-btn" disabled>▶ Enter first person (F)</button>
-    <button id="fp-mode" style="display:none">mode: walk (T)</button>
-  </div>
-  <div id="fp-help">
-    <b>WASD</b> move · <b>mouse</b> look · <b>Shift</b> sprint · <b>T</b> walk/fly ·
-    <b>Space/C</b> up/down (fly) · <b>Esc</b> exit<br/>
-    Touch: <b>left half</b> = move stick · <b>right half</b> = look
+<div id="ui">
+  <div id="crosshair" style="display:none"></div>
+  <div id="vignette"></div>
+  <div id="edgeCue">↩ edge of the park — turn back</div>
+  <div id="spot" style="display:none">◈ Council Crest Summit</div>
+  <div id="attr">Terrain: Mapzen/AWS · Imagery © Esri, Maxar, Earthstar</div>
+  <div id="touchHud">
+    <div id="sprintPip">▲ sprint</div>
+    <div id="stick"><div id="stickKnob"></div></div>
+    <div id="btnJump">jump</div>
   </div>
 </div>
-<script>
-  const map = new maplibregl.Map({
-    container: 'map',
-    style: 'https://tiles.openfreemap.org/styles/liberty', // keyless OSM vector tiles
-    center: [-122.700, 45.487],   // heart of SW Portland
-    zoom: 13.4,
-    pitch: 62,
-    bearing: 205,                 // looking southwest into the hills
-    hash: true,                   // camera state in the URL — shareable views
-    maxPitch: 104,                // >90 lets first-person look slightly upward
-    antialias: true
-  });
+<div id="loading">building Council Crest…</div>
+<div id="play">
+  <div class="title">Council Crest</div>
+  <div class="sub">
+    <kbd>W A S D</kbd> move · <kbd>Shift</kbd> sprint · <kbd>Space</kbd> jump · <kbd>mouse</kbd> look · <kbd>Esc</kbd> release<br/><br/>
+    click to enter
+  </div>
+</div>
 
-  // No map chrome (zoom buttons, scale bar) — this is a game, not a map.
-  // The default AttributionControl stays (OSM/terrain license requirement).
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+}}
+</script>
 
-  map.on('load', () => {
-    // Real elevation: AWS Terrain Tiles (terrarium encoding, no key needed).
-    map.addSource('terrain', {
-      type: 'raster-dem',
-      tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
-      encoding: 'terrarium',
-      tileSize: 256,
-      maxzoom: 14,
-      attribution: 'Terrain: Mapzen/AWS'
-    });
-    map.setTerrain({ source: 'terrain', exaggeration: 1.35 });
+<script type="module">
+import * as THREE from 'three';
+import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-    // Drape real aerial imagery over the hill — the single biggest "map → game"
-    // move. Esri World Imagery (keyless) at high zoom gives actual canopy,
-    // clearings and the summit lawn instead of the flat cartographic beige wash.
-    // Note Esri tiles are {z}/{y}/{x} order, not {z}/{x}/{y}.
-    map.addSource('satellite', {
-      type: 'raster',
-      tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
-      tileSize: 256,
-      maxzoom: 19,
-      attribution: 'Imagery © Esri, Maxar, Earthstar Geographics'
-    });
+// ---- the level: Council Crest, Portland's high point ----
+const LNG0 = -122.7076, LAT0 = 45.4983;   // summit
+const HALF = 950;                           // half-extent of the level (m) — ~1.9 km square
+const BOUND = 860;                          // hard backstop radius (m) — now rarely reached
+const EDGE_START = 700;                      // margin where the boundary feel begins
+const EDGE_PUSH = 7;                         // inward drift (m/s²) at the rim
+const FOG_NEAR0 = 350, FOG_FAR0 = 1850;      // base fog; thickens toward the edge
+const EXAG = 1.25;                          // vertical exaggeration — make the hill read
+const EYE = 1.7;                            // eye height (m)
+const PLAZA_R = 11;                          // summit viewing-plaza radius (m)
+let   PLAZA_TOP = null;                      // plaza deck world-y (set once the DEM is in)
+const TOWER = { x: 18, z: 120, h: 58 };      // broadcast lattice tower, ~120 m SSE of the summit
+const FOUNTAIN = { bearing: 38, dist: 16 };  // the "Joy" bronze fountain, just off the plaza rim (NE)
+const DEM_Z = 14, SAT_Z = 17;               // z17 imagery (~1m/px) keeps the foreground sharp
+const cosLat0 = Math.cos(LAT0 * Math.PI / 180);
+const dLng = HALF / (111320 * cosLat0);
+const dLat = HALF / 111320;
 
-    // Kill the map paradigm: hide EVERY symbol layer (road/POI/place label text
-    // and icons). This is the other big anti-map move — and it silences the
-    // MapLibre `_mult` icon-bucket spam at the street-level FP camera for free.
-    for (const l of map.getStyle().layers) {
-      if (l.type === 'symbol') map.setLayoutProperty(l.id, 'visibility', 'none');
-    }
+// ---- renderer / scene / camera ----
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
 
-    // Atmosphere: late-afternoon SW Portland. Deep blue zenith falling to a warm,
-    // hazy horizon; distance fog so the far forested ridges recede instead of
-    // standing out crisp like a map. (MapLibre v5 sky is a gradient atmosphere —
-    // no sun disc API — so the sun is implied by the warm horizon + the light below.)
-    map.setSky && map.setSky({
-      'sky-color': '#2f6cb3',          // rich blue at the top of the dome
-      'sky-horizon-blend': 0.75,       // how far the blue reaches toward the horizon
-      'horizon-color': '#e6d2ac',      // warm golden haze band at the horizon
-      'horizon-fog-blend': 0.55,       // blend the horizon down into the ground fog
-      'fog-color': '#ddd0bb',          // warm haze the distant ridges dissolve into
-      'fog-ground-blend': 0.2,         // keep the foreground clear, haze the distance
-      'atmosphere-blend': 0.7
-    });
+const scene = new THREE.Scene();
+const HORIZON = new THREE.Color('#ddd0bb');     // warm haze the distance dissolves into
+scene.fog = new THREE.Fog(HORIZON, 350, 1850);
 
-    // Sun-anchored directional light so building faces shade by their real-world
-    // orientation (anchor:'map') instead of always facing the camera. Low, warm
-    // afternoon sun from the southwest gives the boxes form and a game-lit mood.
-    map.setLight && map.setLight({
-      anchor: 'map',
-      position: [1.5, 235, 50],        // [radius, azimuth° (SW), polar° from vertical]
-      color: '#ffe9c6',                // warm sunlight
-      intensity: 0.6
-    });
+const BASE_FOV = 75, FOV_KICK = 8, FOV_LERP = 5;   // sprinting widens FOV → tactile sense of speed
+const camera = new THREE.PerspectiveCamera(BASE_FOV, innerWidth / innerHeight, 0.1, 6000);
 
-    // Extrude buildings from the OpenMapTiles 'building' layer.
-    const layers = map.getStyle().layers;
-    const firstSymbol = layers.find(l => l.type === 'symbol')?.id;
+// gradient sky dome (deep blue zenith → warm horizon), matches the MapLibre build's mood
+const skyGeo = new THREE.SphereGeometry(4000, 32, 16);
+const skyMat = new THREE.ShaderMaterial({
+  side: THREE.BackSide, depthWrite: false, fog: false,
+  uniforms: { top: { value: new THREE.Color('#2f6cb3') }, bot: { value: HORIZON } },
+  vertexShader: `varying float h; void main(){ h = normalize(position).y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: `varying float h; uniform vec3 top; uniform vec3 bot;
+    void main(){ float t = clamp(smoothstep(-0.05, 0.55, h), 0.0, 1.0); gl_FragColor = vec4(mix(bot, top, t), 1.0); }`
+});
+scene.add(new THREE.Mesh(skyGeo, skyMat));
 
-    // Satellite drape sits ABOVE all the cartographic fills/lines (covering the
-    // green/beige map ground and the bright road casings) but BELOW the buildings,
-    // which still extrude on top of the real imagery. Insert satellite first, then
-    // buildings just below the (hidden) symbols — buildings land above satellite.
-    map.addLayer({
-      id: 'satellite',
-      type: 'raster',
-      source: 'satellite',
-      paint: { 'raster-opacity': 1, 'raster-fade-duration': 300 }
-    }, firstSymbol);
+// ---- illustrated distant backdrop: a painted 360° panorama ring beyond the terrain ----
+// three.js can't mesh terrain out to the Cascades, so the far world is an ILLUSTRATION on a
+// canvas-textured cylinder: layered ridgelines with atmospheric-perspective fade + the real
+// Cascade peaks at their TRUE compass bearings from the summit. It's fog-exempt (fog would
+// erase anything past 1850 m) and its base is painted to the same warm horizon haze the
+// fogged terrain edge dissolves into, so mesh and illustration read as one continuous world.
+// It's fixed to the WORLD (a child of the scene, not the camera), so it rotates correctly.
+//
+// Bearing→texture alignment is DERIVED, not guessed. three.js CylinderGeometry places the
+// u=0 texture column at world +z and wraps u→theta CCW, so the column seen looking toward
+// compass bearing B is u=(180−B)/360. Painting content for bearing B at x=((180−B)/360)·W
+// therefore needs no mesh rotation and no mirror flip (BackSide keeps the same UVs).
+const bearingTo = (lat, lng) => {
+  const east = (lng - LNG0) * 111320 * cosLat0, north = (lat - LAT0) * 111320;
+  return ((Math.atan2(east, north) * 180 / Math.PI) % 360 + 360) % 360;   // 0=N, 90=E
+};
+const PEAKS = [
+  // h = px above the horizon line (artistic ~2.5× the real ~2° angle so the Cascades read);
+  // Hood is the hero — tallest, asymmetric, deepest snow. Real summit coords + a haze tint.
+  { name: 'Mt Hood',      lat: 45.3735, lng: -121.6959, h: 178, w: 270, snow: 0.64, hero: true, tint: '#dbe4ee' },
+  { name: 'Mt Adams',     lat: 46.2024, lng: -121.4906, h: 86,  w: 240, snow: 0.50, faint: 0.78, tint: '#c4cdd9' },
+  { name: 'Mt St Helens', lat: 46.1914, lng: -122.1956, h: 96,  w: 250, snow: 0.52, dome: true,  tint: '#ced7e2' },
+  { name: 'Mt Rainier',   lat: 46.8523, lng: -121.7603, h: 112, w: 240, snow: 0.60, faint: 0.55, bOff: -5, tint: '#c8d2de' },
+  { name: 'Mt Jefferson', lat: 44.6743, lng: -121.7996, h: 82,  w: 150, snow: 0.50, faint: 0.72, tint: '#c4ced9' },
+];
+function drawPeak(g, cx, hY, p, W) {
+  if (cx < -p.w || cx > W + p.w) return;
+  const top = hY - p.h, hw = p.w / 2;
+  g.save();
+  g.globalAlpha = p.faint || 1;
+  g.beginPath();
+  g.moveTo(cx - hw, hY);
+  if (p.dome) {                          // St Helens — broad, flat-topped truncated dome
+    g.lineTo(cx - hw * 0.5, top + p.h * 0.16);
+    g.quadraticCurveTo(cx, top - 3, cx + hw * 0.5, top + p.h * 0.16);
+    g.lineTo(cx + hw, hY);
+  } else if (p.hero) {                    // Hood — summit left of center, steep N face, long S shoulder
+    g.lineTo(cx - hw * 0.18, top + p.h * 0.04);
+    g.lineTo(cx - hw * 0.05, top);
+    g.lineTo(cx + hw, hY);
+  } else {
+    g.lineTo(cx - hw * 0.05, top);
+    g.lineTo(cx + hw, hY);
+  }
+  g.closePath();
+  const body = g.createLinearGradient(0, top, 0, hY);
+  body.addColorStop(0, p.tint);
+  body.addColorStop(1, '#cfc6b6');       // flanks dissolve into the horizon haze
+  g.fillStyle = body; g.fill();
+  // a faint shaded right flank gives the cone form instead of a flat cutout
+  g.save(); g.clip();
+  g.beginPath();
+  g.moveTo(cx + hw * 0.02, top); g.lineTo(cx + hw, hY); g.lineTo(cx + hw * 0.02, hY);
+  g.closePath();
+  g.fillStyle = 'rgba(70,92,120,0.16)'; g.fill();
+  g.restore();
+  // snowcap: clip to the silhouette, fill from the summit down to a jagged snowline
+  g.save(); g.clip();
+  const snowY = top + p.h * p.snow;
+  g.beginPath(); g.moveTo(cx - hw, snowY);
+  let sd = 1.7;
+  for (let x = cx - hw, k = 0; x <= cx + hw; x += hw / 4, k++) {
+    sd = -sd; g.lineTo(x, snowY + sd * p.h * 0.05 - p.h * (k & 1 ? 0.02 : 0));
+  }
+  g.lineTo(cx + hw, snowY); g.lineTo(cx + hw, top - 4); g.lineTo(cx - hw, top - 4);
+  g.closePath();
+  const snow = g.createLinearGradient(0, top, 0, snowY);
+  snow.addColorStop(0, 'rgba(245,249,252,0.97)');
+  snow.addColorStop(1, 'rgba(214,224,234,0.55)');
+  g.fillStyle = snow; g.fill();
+  g.restore();
+  g.restore();
+}
+function makeBackdrop() {
+  const W = 4096, H = 1024, hY = Math.round(H * 0.55);
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d');
+  const bx = B => ((((180 - B) % 360) + 360) % 360) / 360 * W;   // bearing → canvas x (derived)
 
-    map.addLayer({
-      id: '3d-buildings',
-      source: 'openmaptiles',
-      'source-layer': 'building',
-      type: 'fill-extrusion',
-      minzoom: 13,
-      paint: {
-        'fill-extrusion-color': '#c9b8a8',
-        'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 8],
-        'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
-        'fill-extrusion-opacity': 0.85
-      }
-    }, firstSymbol);
+  // soft atmospheric glow hugging the horizon
+  const glow = g.createLinearGradient(0, hY - 170, 0, hY + 30);
+  glow.addColorStop(0, 'rgba(223,212,192,0)');
+  glow.addColorStop(0.72, 'rgba(228,217,197,0.40)');
+  glow.addColorStop(1, 'rgba(223,212,192,0.78)');
+  g.fillStyle = glow; g.fillRect(0, hY - 170, W, 200);
 
-    document.getElementById('fp-btn').disabled = false;
+  // downtown towers in the valley to the NE — a faint hazy cluster sitting low on the horizon
+  const dtx = bx(bearingTo(45.5187, -122.6790));
+  g.save(); g.globalAlpha = 0.5;
+  for (let i = 0; i < 9; i++) {
+    const tw = 5 + (i % 3) * 3, th = 10 + ((i * 37) % 26), tx = dtx - 34 + i * 8;
+    g.fillStyle = '#b9c1cd'; g.fillRect(tx, hY - th, tw, th);
+  }
+  g.restore();
 
-    // Boot straight into first person — the world should read as place, not map.
-    // Start on the Council Crest summit (Portland's high point, ~330 m) looking
-    // northeast out over the city, then let the player walk/fly from there.
-    bootFirstPerson();
-  });
-
-  // Wait for the terrain DEM to actually report elevation at the start point
-  // (queryTerrainElevation returns 0/null until the tile streams in), then enter FP.
-  function bootFirstPerson() {
-    const startLng = -122.7076, startLat = 45.4983;   // Council Crest summit
-    let tries = 0;
-    (function wait() {
-      if (fp.on) return;                               // user already jumped in
-      const g = groundAt(startLng, startLat);
-      if (g > 50 || tries++ > 40) {                    // real summit elevation arrived
-        fpEnter(startLng, startLat, 55, -3, 'walk');
-      } else {
-        setTimeout(wait, 150);
-      }
-    })();
+  // distant Cascade peaks (drawn BEFORE the ridge layers so the foothills occlude their bases)
+  for (const p of PEAKS) {
+    const x = bx(bearingTo(p.lat, p.lng) + (p.bOff || 0));
+    drawPeak(g, x, hY, p, W); drawPeak(g, x - W, hY, p, W); drawPeak(g, x + W, hY, p, W);
   }
 
-  document.querySelectorAll('.spot').forEach(el => {
-    el.addEventListener('click', () => {
-      const [lng, lat, zoom, pitch, bearing] = el.dataset.v.split(',').map(Number);
-      if (fp.on) {
-        // Fast-travel without leaving first person: drop onto the new spot.
-        fp.lng = lng; fp.lat = lat; fp.heading = bearing; fp.look = -3;
-        fp.alt = groundAt(lng, lat) + fp.eye;
-        updateZone(true);
-      } else {
-        map.flyTo({ center: [lng, lat], zoom, pitch, bearing, duration: 2500 });
-      }
-    });
-  });
-
-  // ============ First-person walk/fly mode ============
-  const fp = {
-    on: false, mode: 'walk',
-    lng: 0, lat: 0, alt: 0,
-    region: null,      // current neighborhood name (for the zone toast/chip)
-    heading: 0,        // compass deg, 0 = north
-    look: 0,           // vertical look deg, 0 = horizon, + = up
-    eye: 1.8,          // eye height above ground (m)
-    walkSpeed: 2.4,    // m/s
-    flySpeed: 22,      // m/s
-    keys: new Set(),
-    lastT: 0
-  };
-  const canvas = map.getCanvas();
-  const fpBtn = document.getElementById('fp-btn');
-  const fpModeBtn = document.getElementById('fp-mode');
-  const HANDLERS = ['dragPan', 'dragRotate', 'scrollZoom', 'keyboard', 'doubleClickZoom', 'touchZoomRotate', 'touchPitch'];
-
-  function groundAt(lng, lat) {
-    const e = map.queryTerrainElevation && map.queryTerrainElevation([lng, lat]);
-    return e == null ? 0 : e;
-  }
-
-  // ---- SW Portland neighborhoods (hand-placed centroids) ----
-  // Nearest-centroid wins; beyond the cutoff you're just "Southwest Portland".
-  const NEIGHBORHOODS = [
-    { name: 'Council Crest',        lng: -122.7076, lat: 45.4983 },
-    { name: 'Marquam Hill',         lng: -122.6975, lat: 45.4995 },  // OHSU
-    { name: 'Marquam Nature Park',  lng: -122.6935, lat: 45.4880 },
-    { name: 'Healy Heights',        lng: -122.7165, lat: 45.4890 },
-    { name: 'Hillside',             lng: -122.7005, lat: 45.5120 },
-    { name: 'Hillsdale',            lng: -122.7095, lat: 45.4737 },
-    { name: 'Bridlemile',           lng: -122.7330, lat: 45.4900 },
-    { name: 'Homestead',            lng: -122.6885, lat: 45.4955 },
-    { name: 'Burlingame',           lng: -122.6960, lat: 45.4675 },
-    { name: 'Multnomah Village',    lng: -122.7126, lat: 45.4530 },
-    { name: 'South Burlingame',     lng: -122.6885, lat: 45.4590 },
+  // layered ridgelines, far→near: faint blue-grey high near the horizon → darker forested
+  // foothills with a taller, rougher silhouette. Frequencies are integer harmonics of the
+  // 4096 px width so the profile is seamless across the due-south wrap.
+  const TWO_PI_W = 2 * Math.PI / W;
+  const ridge = (x, harms) => harms.reduce((y, [a, n, ph]) => y + a * Math.sin(x * n * TWO_PI_W + ph), 0);
+  const layers = [
+    { base: hY - 22, col: '#aab6c4', hs: [[15, 3, 0.0], [7, 9, 2.1], [3, 23, 4.7]] },
+    { base: hY - 6,  col: '#94a59b', hs: [[22, 4, 1.3], [10, 11, 3.4], [4, 27, 0.7]] },
+    { base: hY + 14, col: '#6c8870', hs: [[32, 5, 2.6], [14, 13, 1.1], [6, 31, 5.2]] },
+    { base: hY + 42, col: '#4c6952', hs: [[46, 6, 0.4], [19, 12, 4.2], [8, 29, 2.3]] },
   ];
-  function regionAt(lng, lat) {
-    let best = null, bd = Infinity;
-    const cosL = Math.cos(lat * Math.PI / 180);
-    for (const n of NEIGHBORHOODS) {
-      const dx = (lng - n.lng) * cosL, dy = lat - n.lat;
-      const d = dx * dx + dy * dy;
-      if (d < bd) { bd = d; best = n; }
-    }
-    return Math.sqrt(bd) < 0.020 ? best.name : 'Southwest Portland';  // ~2.2 km cutoff
+  for (const L of layers) {
+    g.beginPath(); g.moveTo(0, H);
+    for (let x = 0; x <= W; x += 3) g.lineTo(x, L.base - Math.abs(ridge(x, L.hs)) * 0.5 - ridge(x, L.hs) * 0.5);
+    g.lineTo(W, H); g.closePath();
+    const grd = g.createLinearGradient(0, L.base - 80, 0, H);
+    grd.addColorStop(0, L.col);
+    grd.addColorStop(1, '#d8ccb7');       // base melts into the warm horizon haze
+    g.fillStyle = grd; g.fill();
   }
 
-  const zoneChip = document.getElementById('zone-chip');
-  const zoneToast = document.getElementById('zone-toast');
-  zoneToast.addEventListener('animationend', () => {
-    zoneToast.classList.remove('show'); zoneToast.style.display = 'none';
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  const geo = new THREE.CylinderGeometry(3500, 3500, 3000, 160, 1, true);
+  const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, transparent: true, depthWrite: false, fog: false });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.y = 480;                   // horizon row (canvas v=0.55) lands at world y≈330 (eye level)
+  mesh.renderOrder = -1;
+  return mesh;
+}
+scene.add(makeBackdrop());
+
+// Lighting for a satellite-draped hill: the imagery already carries baked sun and
+// shadow, so keep a bright flat fill (ambient + hemisphere) and add only a gentle
+// directional for form — otherwise slopes facing away from the sun crush to black.
+scene.add(new THREE.AmbientLight('#ffffff', 0.85));
+scene.add(new THREE.HemisphereLight('#d6e6f5', '#9c8f76', 1.1));
+const sun = new THREE.DirectionalLight('#ffe9c6', 0.55);
+sun.position.set(-0.8, 0.55, -0.6).multiplyScalar(1000);   // low, from the southwest
+scene.add(sun);
+
+// ---- tile math (Web Mercator slippy) ----
+const TAU = Math.PI;
+function tileXY(lng, lat, z) {
+  const n = 2 ** z, latRad = lat * Math.PI / 180;
+  return [Math.floor((lng + 180) / 360 * n),
+          Math.floor((1 - Math.asinh(Math.tan(latRad)) / TAU) / 2 * n)];
+}
+function lnglatToPx(lng, lat, T) {
+  const n = 2 ** T.z, latRad = lat * Math.PI / 180;
+  const gx = (lng + 180) / 360 * n;
+  const gy = (1 - Math.asinh(Math.tan(latRad)) / TAU) / 2 * n;
+  return [(gx - T.txmin) * 256, (gy - T.tymin) * 256];
+}
+function loadImg(url) {
+  return new Promise((res, rej) => {
+    const im = new Image(); im.crossOrigin = 'anonymous';
+    im.onload = () => res(im); im.onerror = () => rej(new Error('tile ' + url));
+    im.src = url;
   });
-  // Re-evaluate the current neighborhood; pop a toast + update the chip on change.
-  function updateZone(force) {
-    const z = regionAt(fp.lng, fp.lat);
-    if (z === fp.region && !force) return;
-    fp.region = z;
-    zoneChip.textContent = '◈ ' + z;
-    zoneChip.style.display = fp.on ? 'block' : 'none';
-    if (fp.on) showToast(z);
-  }
-  function showToast(name) {
-    zoneToast.querySelector('.name').textContent = name;
-    zoneToast.style.display = 'block';
-    zoneToast.classList.remove('show');
-    void zoneToast.offsetWidth;        // restart the animation
-    zoneToast.classList.add('show');
-  }
+}
+// fetch a tile grid covering the bbox, stitch onto one canvas, return canvas + mapping
+async function fetchGrid(z, urlFor) {
+  const c = [tileXY(LNG0 - dLng, LAT0 + dLat, z), tileXY(LNG0 + dLng, LAT0 - dLat, z)];
+  const txmin = Math.min(c[0][0], c[1][0]), txmax = Math.max(c[0][0], c[1][0]);
+  const tymin = Math.min(c[0][1], c[1][1]), tymax = Math.max(c[0][1], c[1][1]);
+  const w = (txmax - txmin + 1) * 256, h = (tymax - tymin + 1) * 256;
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  const ctx = cv.getContext('2d', { willReadFrequently: true });
+  const jobs = [];
+  for (let tx = txmin; tx <= txmax; tx++)
+    for (let ty = tymin; ty <= tymax; ty++)
+      jobs.push(loadImg(urlFor(z, tx, ty)).then(im => ctx.drawImage(im, (tx - txmin) * 256, (ty - tymin) * 256)));
+  await Promise.all(jobs);
+  return { cv, ctx, w, h, z, txmin, tymin };
+}
 
-  function fpEnter(lng, lat, heading, look, mode) {
-    const c = map.getCenter();
-    fp.lng = lng ?? c.lng;
-    fp.lat = lat ?? c.lat;
-    fp.heading = heading ?? map.getBearing();
-    fp.look = look ?? 0;
-    fp.mode = mode ?? 'walk';
-    fp.alt = groundAt(fp.lng, fp.lat) + fp.eye;
-    fp.on = true;
-    fp.lastT = performance.now();
-    map.setCenterClampedToGround(false);   // required for eye-level camera over terrain
-    map.setVerticalFieldOfView(60);        // wider FOV feels right at street level
-    HANDLERS.forEach(h => map[h] && map[h].disable());
-    // Pointer lock needs a user gesture; on autoboot it'll throw/reject — ignore it
-    // (the canvas-click handler re-grabs the mouse on first click).
-    try { const p = canvas.requestPointerLock && canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
-    fpBtn.textContent = '✕ Exit to map (Esc)';
-    fpModeBtn.style.display = '';
-    setMode(fp.mode);
-    document.getElementById('fp-help').style.display = 'block';
-    document.getElementById('orbit-help').style.display = 'none';
-    document.getElementById('crosshair').style.display = 'block';
-    fp.region = null; updateZone(true);    // announce where you spawned
-    requestAnimationFrame(fpFrame);
-  }
+const demUrl = (z, x, y) => `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`;
+const satUrl = (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`; // Esri is {z}/{y}/{x}
 
-  function fpExit() {
-    fp.on = false;
-    map.setCenterClampedToGround(true);
-    map.setVerticalFieldOfView(36.87);     // MapLibre default
-    HANDLERS.forEach(h => map[h] && map[h].enable());
-    document.exitPointerLock && document.exitPointerLock();
-    fpBtn.textContent = '▶ Enter first person (F)';
-    fpModeBtn.style.display = 'none';
-    document.getElementById('fp-help').style.display = 'none';
-    document.getElementById('orbit-help').style.display = '';
-    document.getElementById('crosshair').style.display = 'none';
-    zoneChip.style.display = 'none';
-    // settle into a sane orbit view of where you ended up
-    map.jumpTo({ center: [fp.lng, fp.lat], zoom: 16.5, pitch: 60, bearing: fp.heading });
-  }
+// ---- elevation sampling (bilinear over the stitched DEM) ----
+let DEM, DEMDATA;
+function demSample(lng, lat) {
+  const [px, py] = lnglatToPx(lng, lat, DEM);
+  const w = DEM.w, h = DEM.h;
+  let x0 = Math.floor(px), y0 = Math.floor(py);
+  const fx = px - x0, fy = py - y0;
+  x0 = Math.max(0, Math.min(w - 2, x0)); y0 = Math.max(0, Math.min(h - 2, y0));
+  const at = (x, y) => { const i = (y * w + x) * 4; return DEMDATA[i] * 256 + DEMDATA[i + 1] + DEMDATA[i + 2] / 256 - 32768; };
+  const a = at(x0, y0), b = at(x0 + 1, y0), c = at(x0, y0 + 1), d = at(x0 + 1, y0 + 1);
+  return (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy;
+}
+// world ENU ↔ lng/lat
+const eastOf = lng => (lng - LNG0) * 111320 * cosLat0;
+const northOf = lat => (lat - LAT0) * 111320;
+const lngOf = east => LNG0 + east / (111320 * cosLat0);
+const latOf = north => LAT0 + north / 111320;
+// ground elevation at a world (x=east, z=-north) point. The summit plaza is a built
+// terrace, so inside its rim the walkable ground is the flat deck, not the raw DEM.
+function groundAt(x, z) {
+  let y = demSample(lngOf(x), latOf(-z)) * EXAG;
+  if (PLAZA_TOP !== null && x * x + z * z < (PLAZA_R - 0.4) * (PLAZA_R - 0.4)) y = Math.max(y, PLAZA_TOP);
+  return y;
+}
 
-  function setMode(m) {
-    fp.mode = m;
-    fpModeBtn.textContent = 'mode: ' + m + ' (T)';
-  }
-
-  function fpFrame(t) {
-    if (!fp.on) return;
-    const dt = Math.min((t - fp.lastT) / 1000, 0.1);
-    fp.lastT = t;
-
-    const sprint = fp.keys.has('shift') ? (fp.mode === 'fly' ? 4 : 3) : 1;
-    const spd = (fp.mode === 'fly' ? fp.flySpeed : fp.walkSpeed) * sprint;
-
-    let fwd = (fp.keys.has('w') ? 1 : 0) - (fp.keys.has('s') ? 1 : 0);
-    let strafe = (fp.keys.has('d') ? 1 : 0) - (fp.keys.has('a') ? 1 : 0);
-    fwd += touchStick.y;
-    strafe += touchStick.x;
-    fwd = Math.max(-1, Math.min(1, fwd));
-    strafe = Math.max(-1, Math.min(1, strafe));
-
-    let vert = 0;
-    if (fp.mode === 'fly') {
-      vert = ((fp.keys.has(' ') ? 1 : 0) - (fp.keys.has('c') ? 1 : 0)) * spd * dt;
-      // W/S also climb/descend along the look direction
-      vert += fwd * Math.sin(fp.look * Math.PI / 180) * spd * dt;
-    }
-    const horizScale = fp.mode === 'fly' ? Math.cos(fp.look * Math.PI / 180) : 1;
-
-    const rad = fp.heading * Math.PI / 180;
-    const dEast = (fwd * Math.sin(rad) + strafe * Math.cos(rad)) * spd * dt * horizScale;
-    const dNorth = (fwd * Math.cos(rad) - strafe * Math.sin(rad)) * spd * dt * horizScale;
-
-    fp.lat += dNorth / 111320;
-    fp.lng += dEast / (111320 * Math.cos(fp.lat * Math.PI / 180));
-
-    const ground = groundAt(fp.lng, fp.lat);
-    if (fp.mode === 'walk') {
-      // smooth toward terrain so stairs/slopes don't jitter
-      const target = ground + fp.eye;
-      fp.alt += (target - fp.alt) * Math.min(1, dt * 8);
-    } else {
-      fp.alt = Math.max(ground + 1.0, fp.alt + vert);
-    }
-
-    // aim at a point 300 m ahead along the view ray; MapLibre derives the camera
-    const lookRad = fp.look * Math.PI / 180;
-    const hdgRad = fp.heading * Math.PI / 180;
-    const D = 300;
-    const tLat = fp.lat + (Math.cos(hdgRad) * Math.cos(lookRad) * D) / 111320;
-    const tLng = fp.lng + (Math.sin(hdgRad) * Math.cos(lookRad) * D) / (111320 * Math.cos(fp.lat * Math.PI / 180));
-    const camOpts = map.calculateCameraOptionsFromTo(
-      [fp.lng, fp.lat], fp.alt, [tLng, tLat], fp.alt + Math.sin(lookRad) * D
-    );
-    map.jumpTo(camOpts);
-    updateZone(false);   // pop a toast when we cross into a new neighborhood
-    requestAnimationFrame(fpFrame);
-  }
-
-  // ---- desktop input ----
-  fpBtn.addEventListener('click', () => fp.on ? fpExit() : fpEnter());
-  fpModeBtn.addEventListener('click', () => setMode(fp.mode === 'walk' ? 'fly' : 'walk'));
-
-  document.addEventListener('keydown', e => {
-    if (e.key === 'f' || e.key === 'F') { fp.on ? fpExit() : fpEnter(); return; }
-    if (!fp.on) return;
-    if (e.key === 't' || e.key === 'T') { setMode(fp.mode === 'walk' ? 'fly' : 'walk'); return; }
-    if (e.key === 'Escape') { fpExit(); return; }
-    fp.keys.add(e.key === ' ' ? ' ' : e.key.toLowerCase());
-    if (e.key === ' ') e.preventDefault();
-  });
-  document.addEventListener('keyup', e => {
-    fp.keys.delete(e.key === ' ' ? ' ' : e.key.toLowerCase());
-    if (e.key === 'Shift') fp.keys.delete('shift');
-  });
-
-  document.addEventListener('mousemove', e => {
-    if (!fp.on || document.pointerLockElement !== canvas) return;
-    fp.heading = (fp.heading + e.movementX * 0.14 + 360) % 360;
-    fp.look = Math.max(-70, Math.min(13, fp.look - e.movementY * 0.1));
-  });
-  // clicking back into the canvas re-grabs the mouse
-  canvas.addEventListener('click', () => {
-    if (fp.on && document.pointerLockElement !== canvas) {
-      canvas.requestPointerLock && canvas.requestPointerLock();
-    }
-  });
-
-  // ---- touch input: left half = move stick, right half = look ----
-  const touchStick = { x: 0, y: 0 };
-  const touches = {}; // id -> {x0, y0, x, y, side}
-  canvas.addEventListener('touchstart', e => {
-    if (!fp.on) return;
-    for (const t of e.changedTouches) {
-      touches[t.identifier] = {
-        x0: t.clientX, y0: t.clientY, x: t.clientX, y: t.clientY,
-        side: t.clientX < innerWidth / 2 ? 'move' : 'look'
-      };
-    }
-    e.preventDefault();
-  }, { passive: false });
-  canvas.addEventListener('touchmove', e => {
-    if (!fp.on) return;
-    for (const t of e.changedTouches) {
-      const rec = touches[t.identifier];
-      if (!rec) continue;
-      if (rec.side === 'move') {
-        touchStick.x = Math.max(-1, Math.min(1, (t.clientX - rec.x0) / 60));
-        touchStick.y = Math.max(-1, Math.min(1, -(t.clientY - rec.y0) / 60));
-      } else {
-        fp.heading = (fp.heading + (t.clientX - rec.x) * 0.4 + 360) % 360;
-        fp.look = Math.max(-70, Math.min(13, fp.look - (t.clientY - rec.y) * 0.25));
-      }
-      rec.x = t.clientX; rec.y = t.clientY;
-    }
-    e.preventDefault();
-  }, { passive: false });
-  const endTouch = e => {
-    if (!fp.on) return;
-    for (const t of e.changedTouches) {
-      const rec = touches[t.identifier];
-      if (rec && rec.side === 'move') { touchStick.x = 0; touchStick.y = 0; }
-      delete touches[t.identifier];
-    }
+// ---- forest: instanced Douglas-firs scattered on the canopy the imagery shows ----
+// Where to plant is read from the satellite drape itself: sample the stitched imagery
+// canvas and keep pixels that read as vegetation (green-dominant, mid-dark — not the
+// bright summit lawn, roads, or roofs). The summit clearing (r < 75 m) is left open so
+// the level matches the real grassy crown. Two InstancedMeshes (foliage cones + trunks)
+// share one per-instance transform; fog handles distance fade for free.
+let TREES = 0;
+function plantForest() {
+  const sd = SAT.ctx.getImageData(0, 0, SAT.w, SAT.h).data;
+  const isForest = (lng, lat) => {
+    const [sx, sy] = lnglatToPx(lng, lat, SAT);
+    const x = Math.max(0, Math.min(SAT.w - 1, Math.round(sx)));
+    const y = Math.max(0, Math.min(SAT.h - 1, Math.round(sy)));
+    const i = (y * SAT.w + x) * 4, r = sd[i], g = sd[i + 1], b = sd[i + 2];
+    const bright = (r + g + b) / 3;
+    return g > r * 1.04 && g >= b - 4 && bright > 42 && bright < 150;  // canopy, not lawn/road/roof
   };
-  canvas.addEventListener('touchend', endTouch);
-  canvas.addEventListener('touchcancel', endTouch);
 
-  // debug/test hooks (used by the headless screenshot harness)
-  window.__fpEnter = fpEnter;
-  window.__fpExit = fpExit;
-  window.__fp = fp;
-  window.__forceZone = () => updateZone(true);   // re-trigger toast/chip (for screenshots)
+  // deterministic PRNG so the forest is identical every load (and in the headless shot)
+  let seed = 9987;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+
+  // candidate scatter: jittered grid, thinned, masked to vegetation, summit kept clear
+  const STEP = 9, JIT = 5.5, placements = [];
+  for (let ex = -HALF + 20; ex <= HALF - 20; ex += STEP) {
+    for (let nz = -HALF + 20; nz <= HALF - 20; nz += STEP) {
+      if (rnd() > 0.6) continue;
+      const x = ex + (rnd() - 0.5) * 2 * JIT, z = nz + (rnd() - 0.5) * 2 * JIT;
+      const r = Math.hypot(x, z);
+      if (r < 75 || r > BOUND - 8) continue;                 // open summit; inside the boundary
+      if (Math.hypot(x - TOWER.x, z - TOWER.z) < 8) continue; // clear a pad at the tower base
+      const lng = lngOf(x), lat = latOf(-z);
+      if (!isForest(lng, lat)) continue;
+      placements.push([x, z, 0.72 + rnd() * 0.8, rnd() * Math.PI * 2]);  // x, z, scale, yaw
+    }
+  }
+  TREES = placements.length;
+  if (!TREES) return;
+
+  // one conifer = 3 stacked cones (narrow Douglas-fir silhouette) + a short trunk
+  const tier = (rad, h, y) => { const c = new THREE.ConeGeometry(rad, h, 7); c.translate(0, y, 0); return c; };
+  const foliageGeo = mergeGeometries([tier(2.0, 3.8, 1.9), tier(1.5, 3.3, 3.7), tier(0.9, 2.9, 5.7)]);
+  const trunkGeo = new THREE.CylinderGeometry(0.18, 0.30, 1.8, 5); trunkGeo.translate(0, 0.9, 0);
+  const foliageMat = new THREE.MeshLambertMaterial({ color: '#34512f' });
+  const trunkMat = new THREE.MeshLambertMaterial({ color: '#473527' });
+  const foliage = new THREE.InstancedMesh(foliageGeo, foliageMat, TREES);
+  const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, TREES);
+
+  const dummy = new THREE.Object3D(), tint = new THREE.Color();
+  for (let i = 0; i < TREES; i++) {
+    const [x, z, s, yaw] = placements[i];
+    const gy = groundAt(x, z);
+    dummy.position.set(x, gy - 0.25, z);
+    dummy.rotation.set(0, yaw, 0);
+    dummy.scale.set(s, s, s);
+    dummy.updateMatrix();
+    foliage.setMatrixAt(i, dummy.matrix);
+    trunks.setMatrixAt(i, dummy.matrix);
+    // subtle per-tree tint so the canopy isn't one flat green
+    tint.setHSL(0.27 + (rnd() - 0.5) * 0.04, 0.34, 0.24 + (rnd() - 0.5) * 0.06);
+    foliage.setColorAt(i, tint);
+  }
+  foliage.instanceMatrix.needsUpdate = true;
+  trunks.instanceMatrix.needsUpdate = true;
+  if (foliage.instanceColor) foliage.instanceColor.needsUpdate = true;
+  scene.add(foliage, trunks);
+}
+
+// ---- summit landmarks: the compass-rose viewing plaza + a broadcast lattice tower ----
+// Council Crest's real summit is a circular paved viewing plaza with a big compass rose
+// at the city's high point (1073 ft), ringed by a low seat wall, with broadcast towers on
+// the next rise to the south (refs: Portland.gov, placespages, oregonhikers — NOTES #11).
+// The compass rays point to the actual Cascade peaks at their TRUE bearings, so the plaza
+// you stand on lines up with the painted peaks on the backdrop ring.
+
+// a steel strut: a thin cylinder spanning two 3-D points (for the lattice tower)
+const _yUp = new THREE.Vector3(0, 1, 0), _dir = new THREE.Vector3(), _q = new THREE.Quaternion();
+function strut(ax, ay, az, bx, by, bz, r) {
+  const dx = bx - ax, dy = by - ay, dz = bz - az, len = Math.hypot(dx, dy, dz);
+  const g = new THREE.CylinderGeometry(r, r, len, 5);
+  g.translate(0, len / 2, 0);
+  _q.setFromUnitVectors(_yUp, _dir.set(dx, dy, dz).normalize());
+  g.applyQuaternion(_q);
+  g.translate(ax, ay, az);
+  return g;
+}
+// a square tapered lattice tower: 4 legs + horizontal belts + X-bracing per segment
+function makeTowerGeo(H, base, top, segs) {
+  const parts = [];
+  const half = t => base + (top - base) * t;
+  const corner = (i, t) => { const hw = half(t); return [(i & 1 ? 1 : -1) * hw, t * H, (i & 2 ? 1 : -1) * hw]; };
+  const faces = [[0, 1], [1, 3], [3, 2], [2, 0]];
+  for (let s = 0; s < segs; s++) {
+    const t0 = s / segs, t1 = (s + 1) / segs;
+    for (let i = 0; i < 4; i++) { const a = corner(i, t0), b = corner(i, t1); parts.push(strut(...a, ...b, 0.16)); } // legs
+    for (const [i, j] of faces) {                          // belt + X-brace per face
+      const ai = corner(i, t1), bj = corner(j, t1);
+      parts.push(strut(...ai, ...bj, 0.07));               // top belt edge
+      parts.push(strut(...corner(i, t0), ...corner(j, t1), 0.06));
+      parts.push(strut(...corner(j, t0), ...corner(i, t1), 0.06));
+    }
+  }
+  return mergeGeometries(parts);
+}
+
+// paint the compass-rose plaza deck onto a canvas (N at top, rays at true bearings)
+function makeCompassTexture() {
+  const S = 1024, C = S / 2, R = 500;
+  const cv = document.createElement('canvas'); cv.width = cv.height = S;
+  const g = cv.getContext('2d');
+  const pt = (bear, rad) => [C + rad * Math.sin(bear * Math.PI / 180), C - rad * Math.cos(bear * Math.PI / 180)];
+
+  // paved stone deck — warm concrete with a soft radial vignette
+  const base = g.createRadialGradient(C, C, 30, C, C, R);
+  base.addColorStop(0, '#c7c0b1'); base.addColorStop(1, '#a59c8c');
+  g.fillStyle = base; g.beginPath(); g.arc(C, C, R, 0, 7); g.fill();
+  // concentric paver rings + radial joints (a paved circle, not a flat slab)
+  g.strokeStyle = 'rgba(90,82,68,0.45)'; g.lineWidth = 2.5;
+  for (let k = 1; k <= 7; k++) { g.beginPath(); g.arc(C, C, R * k / 7, 0, 7); g.stroke(); }
+  for (let a = 0; a < 360; a += 10) { const [x, y] = pt(a, R); g.beginPath(); g.moveTo(...pt(a, R * 0.33)); g.lineTo(x, y); g.stroke(); }
+
+  // peak rays to the real Cascades at true bearings, with name plates
+  const targets = [
+    { n: 'MT HOOD', lat: 45.3735, lng: -121.6959 },
+    { n: 'MT ST HELENS', lat: 46.1914, lng: -122.1956 },
+    { n: 'MT ADAMS', lat: 46.2024, lng: -121.4906 },
+    { n: 'MT RAINIER', lat: 46.8523, lng: -121.7603 },
+    { n: 'MT JEFFERSON', lat: 44.6743, lng: -121.7996 },
+    { n: 'DOWNTOWN', lat: 45.5187, lng: -122.6790 },
+  ];
+  g.font = '700 24px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  for (const t of targets) {
+    const b = bearingTo(t.lat, t.lng);
+    g.strokeStyle = 'rgba(60,52,40,0.6)'; g.lineWidth = 3;
+    g.beginPath(); g.moveTo(...pt(b, R * 0.40)); g.lineTo(...pt(b, R * 0.80)); g.stroke();
+    g.fillStyle = '#3a3327'; g.fillText(t.n, ...pt(b, R * 0.90));   // horizontal label = always legible
+  }
+
+  // central compass rose: a 16-point brass star on a bronze medallion
+  const rose = R * 0.34;
+  g.fillStyle = '#6b5836'; g.beginPath(); g.arc(C, C, rose, 0, 7); g.fill();
+  for (let pass = 0; pass < 2; pass++) {
+    const long = pass === 0;
+    g.fillStyle = long ? '#c9a85e' : '#8f7642';
+    for (let k = 0; k < 8; k++) {
+      const a = (k * 45 + (long ? 0 : 22.5));
+      const tip = pt(a, rose * 0.96), l = pt(a - 90, rose * (long ? 0.14 : 0.10)), r2 = pt(a + 90, rose * (long ? 0.14 : 0.10));
+      g.beginPath(); g.moveTo(...tip); g.lineTo(l[0], l[1]); g.lineTo(C, C); g.lineTo(r2[0], r2[1]); g.closePath(); g.fill();
+    }
+  }
+  g.fillStyle = '#2c2418'; g.beginPath(); g.arc(C, C, rose * 0.12, 0, 7); g.fill();
+  // cardinal letters just outside the rose
+  g.font = '700 40px system-ui, sans-serif'; g.fillStyle = '#efe7d4';
+  for (const [lbl, b] of [['N', 0], ['E', 90], ['S', 180], ['W', 270]]) g.fillText(lbl, ...pt(b, rose + 34));
+  // dedication text under the rose
+  g.font = '600 22px system-ui, sans-serif'; g.fillStyle = '#3a3327';
+  g.fillText('COUNCIL  CREST', C, C + rose + 70);
+  g.fillText('ELEV 1073 FT', C, C + rose + 100);
+
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return tex;
+}
+
+function buildSummit() {
+  const gy = demSample(LNG0, LAT0) * EXAG;
+  PLAZA_TOP = gy + 0.06;
+  const stone = new THREE.MeshLambertMaterial({ color: '#aaa190' });
+
+  // terrace body — a low cylinder whose skirt covers the terrain falling away beneath the deck
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(PLAZA_R, PLAZA_R + 0.4, 3, 64), stone);
+  body.position.set(0, PLAZA_TOP - 1.5, 0);
+  scene.add(body);
+  // compass-rose deck
+  const deck = new THREE.Mesh(new THREE.CircleGeometry(PLAZA_R - 0.4, 96),
+    new THREE.MeshLambertMaterial({ map: makeCompassTexture() }));
+  deck.rotateX(-Math.PI / 2); deck.position.set(0, PLAZA_TOP + 0.02, 0);
+  scene.add(deck);
+  // low seat wall around the rim
+  const wall = new THREE.Mesh(new THREE.CylinderGeometry(PLAZA_R + 0.3, PLAZA_R + 0.3, 0.5, 64, 1, true),
+    new THREE.MeshLambertMaterial({ color: '#8f8676', side: THREE.DoubleSide }));
+  wall.position.set(0, PLAZA_TOP + 0.2, 0);
+  scene.add(wall);
+
+  // broadcast lattice tower on the rise to the south (a Council Crest skyline signature)
+  const tg = groundAt(TOWER.x, TOWER.z);
+  const tower = new THREE.Mesh(makeTowerGeo(TOWER.h, 2.4, 0.6, 14),
+    new THREE.MeshLambertMaterial({ color: '#9aa1a8' }));
+  tower.position.set(TOWER.x, tg, TOWER.z);
+  scene.add(tower);
+  // antenna spire + red aircraft-warning beacon
+  const spire = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.18, 12, 6),
+    new THREE.MeshLambertMaterial({ color: '#b9bfc5' }));
+  spire.position.set(TOWER.x, tg + TOWER.h + 6, TOWER.z);
+  scene.add(spire);
+  const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.7, 10, 8),
+    new THREE.MeshBasicMaterial({ color: '#ff2a18', fog: false }));
+  beacon.position.set(TOWER.x, tg + TOWER.h + 12.4, TOWER.z);
+  scene.add(beacon);
+  // a couple of microwave drums partway up
+  for (const [hy, ang] of [[0.45, 0.4], [0.62, 3.5]]) {
+    const drum = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 0.7, 16),
+      new THREE.MeshLambertMaterial({ color: '#cdd2d6' }));
+    drum.rotation.z = Math.PI / 2; drum.rotation.y = ang;
+    drum.position.set(TOWER.x + Math.cos(ang) * 1.6, tg + TOWER.h * hy, TOWER.z + Math.sin(ang) * 1.6);
+    scene.add(drum);
+  }
+
+  buildFountain();
+}
+
+// The "Joy" fountain — Council Crest's bronze centerpiece (Frederic Littman, 1956): a woman
+// with her hair swept back, lifting a child in her outstretched raised arms, ~3 m tall on a
+// triangular granite base/drinking fountain (refs: portland.gov, the59club, Wikipedia
+// "Pioneer Woman (Littman)"). Built from primitives merged into one bronze mesh; sits just
+// off the plaza rim where you spawn, its front turned back toward the viewing deck.
+function buildFountain() {
+  const fb = FOUNTAIN.bearing * Math.PI / 180;
+  const fx = Math.sin(fb) * FOUNTAIN.dist, fz = -Math.cos(fb) * FOUNTAIN.dist;
+  const fy = groundAt(fx, fz);
+  const g = new THREE.Group();
+  g.position.set(fx, fy, fz);
+  g.rotation.y = Math.atan2(-fx, -fz);        // turn the figure's front toward the plaza/spawn
+
+  const granite = new THREE.MeshLambertMaterial({ color: '#8c857a' });
+  const ped = new THREE.Mesh(new THREE.CylinderGeometry(1.25, 1.5, 0.95, 3), granite);
+  ped.rotation.y = Math.PI; ped.position.y = 0.475; g.add(ped);    // triangular granite base
+  const basin = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.05, 0.4, 28), granite);
+  basin.position.y = 1.05; g.add(basin);                          // shallow fountain bowl
+  const water = new THREE.Mesh(new THREE.CircleGeometry(1.0, 28),
+    new THREE.MeshLambertMaterial({ color: '#5f86a3', transparent: true, opacity: 0.72 }));
+  water.rotateX(-Math.PI / 2); water.position.y = 1.16; g.add(water);
+  const plinth = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.5, 0.7, 12), granite);
+  plinth.position.y = 1.35; g.add(plinth);                        // the figure rises from here
+
+  // bronze figure (one merged mesh), feet at the top of the plinth
+  const P = [];
+  const sph = (r, x, y, z, sx, sy, sz) => {
+    const s = new THREE.SphereGeometry(r, 12, 10);
+    if (sx) s.scale(sx, sy, sz); s.translate(x, y, z); P.push(s);
+  };
+  P.push(strut(-0.085, 0, 0, -0.06, 0.98, 0.0, 0.085));          // legs
+  P.push(strut( 0.085, 0, 0,  0.06, 0.98, 0.0, 0.085));
+  sph(0.17, 0, 1.04, 0);                                          // hips
+  const torso = new THREE.CylinderGeometry(0.21, 0.155, 0.86, 14);
+  torso.translate(0, 1.46, 0.02); P.push(torso);                 // tapered torso
+  sph(0.1, 0, 1.86, 0.03);                                       // shoulder knot
+  P.push(strut(0, 1.86, 0.03, 0, 1.99, 0.05, 0.06));             // neck
+  sph(0.145, 0, 2.12, 0.06);                                     // head
+  sph(0.16, 0, 2.14, -0.05, 0.95, 1.25, 0.85);                   // hair swept back
+  P.push(strut(-0.18, 1.8, 0.05, -0.3, 2.24, 0.32, 0.06));       // L upper arm
+  P.push(strut(-0.3, 2.24, 0.32, -0.09, 2.56, 0.46, 0.052));     // L forearm
+  P.push(strut( 0.18, 1.8, 0.05,  0.3, 2.24, 0.32, 0.06));       // R upper arm
+  P.push(strut( 0.3, 2.24, 0.32,  0.09, 2.56, 0.46, 0.052));     // R forearm
+  sph(0.12, 0, 2.64, 0.48);                                      // child held aloft
+  sph(0.08, 0, 2.8, 0.52);
+  P.push(strut(-0.08, 2.66, 0.5, -0.16, 2.78, 0.46, 0.035));     // child's arms reaching out
+  P.push(strut( 0.08, 2.66, 0.5,  0.16, 2.78, 0.46, 0.035));
+  const figure = new THREE.Mesh(mergeGeometries(P),
+    new THREE.MeshLambertMaterial({ color: '#6f5836' }));        // warm bronze
+  figure.position.y = 1.62; g.add(figure);
+
+  scene.add(g);
+  __fountain = g;
+}
+let __fountain = null;
+
+// Seamless, tileable ground-detail grain (luminance only). Periodic value-noise (sine
+// octaves wrap exactly over the tile) plus faint vertical blade streaks → reads as grass/
+// dirt texture when multiplied onto the satellite drape near the camera.
+function makeGroundDetail() {
+  const S = 256, cv = document.createElement('canvas');
+  cv.width = cv.height = S;
+  const ctx = cv.getContext('2d'), img = ctx.createImageData(S, S), d = img.data;
+  const oct = [[1, 1.0], [2, 0.55], [4, 0.32], [8, 0.18], [16, 0.1]];  // [cycles/tile, amp]
+  let amp = 0; for (const [, a] of oct) amp += a;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    let n = 0;
+    for (const [f, a] of oct)
+      n += a * Math.sin(2 * Math.PI * f * x / S + 1.7 * f) *
+               Math.sin(2 * Math.PI * f * y / S + 0.9 * f);
+    n /= amp;                                              // → roughly [-1, 1]
+    const blade = 0.12 * Math.sin(2 * Math.PI * 24 * x / S);  // fine vertical streaks
+    let v = 0.5 + 0.42 * n + blade;
+    v = v < 0 ? 0 : v > 1 ? 1 : v;
+    const i = (y * S + x) * 4;
+    d[i] = d[i + 1] = d[i + 2] = 255 * v; d[i + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.needsUpdate = true;
+  return t;
+}
+
+// ---- build everything ----
+let SAT, ready = false;
+async function build() {
+  [DEM, SAT] = await Promise.all([fetchGrid(DEM_Z, demUrl), fetchGrid(SAT_Z, satUrl)]);
+  DEMDATA = DEM.ctx.getImageData(0, 0, DEM.w, DEM.h).data;
+
+  const tex = new THREE.CanvasTexture(SAT.cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.flipY = false;                                   // canvas px coords are top-left origin
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();  // kills the grazing-angle smear
+  tex.needsUpdate = true;
+
+  // terrain mesh: a regular grid over the bbox, displaced by the DEM, UV'd to the imagery
+  const N = 320, verts = N + 1;
+  const geo = new THREE.PlaneGeometry(2 * HALF, 2 * HALF, N, N);
+  const pos = geo.attributes.position, uv = geo.attributes.uv;
+  for (let i = 0; i < pos.count; i++) {
+    const east = pos.getX(i);             // PlaneGeometry x ∈ [-HALF, HALF]
+    const north = pos.getY(i);            // PlaneGeometry y ∈ [-HALF, HALF] (before rotation)
+    const lng = lngOf(east), lat = latOf(north);
+    pos.setZ(i, demSample(lng, lat) * EXAG);
+    const [sx, sy] = lnglatToPx(lng, lat, SAT);
+    uv.setXY(i, Math.max(0, Math.min(1, sx / SAT.w)), Math.max(0, Math.min(1, sy / SAT.h)));
+  }
+  geo.rotateX(-Math.PI / 2);              // lay flat: plane y → world z (north → -z)
+  geo.computeVertexNormals();
+  const mat = new THREE.MeshLambertMaterial({ map: tex });
+  // Near-ground detail: the z17 satellite drape minifies to flat green at eye level, so
+  // modulate it with a tileable, seamless grain that's strong underfoot and fades out by
+  // ~180 m (the far hill keeps its true satellite look). Neutral luminance — adds ground
+  // "blade/dirt" texture without tinting roads/plaza. World-space tiled so it doesn't swim.
+  const detailTex = makeGroundDetail();
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uDetail = { value: detailTex };
+    sh.uniforms.uCam = { value: camera.position };   // live Vector3 ref → updates per frame
+    sh.vertexShader = 'varying vec3 vWP;\n' + sh.vertexShader.replace(
+      '#include <begin_vertex>',
+      '#include <begin_vertex>\n  vWP = (modelMatrix * vec4(position, 1.0)).xyz;');
+    sh.fragmentShader = 'uniform sampler2D uDetail;\nuniform vec3 uCam;\nvarying vec3 vWP;\n' +
+      sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+      {
+        float fine   = texture2D(uDetail, vWP.xz * 0.55).r;   // ~1.8 m tile (blades)
+        float coarse = texture2D(uDetail, vWP.xz * 0.11).r;   // ~9 m tile (patchiness)
+        float n = mix(coarse, fine, 0.6) - 0.5;               // centered grain, ±0.5
+        float k = 1.0 - smoothstep(12.0, 180.0, distance(uCam, vWP));
+        diffuseColor.rgb *= 1.0 + n * 0.85 * k;               // multiplicative, hue-neutral
+      }`);
+  };
+  scene.add(new THREE.Mesh(geo, mat));
+
+  // ring the wooded slopes with Douglas-firs (real Council Crest: an open grassy summit
+  // lawn ringed by Douglas-fir + western red cedar — refs in NOTES #10). The satellite
+  // drape reads as flat green at eye level; instanced conifers give the hill real depth.
+  plantForest();
+
+  // the real summit: a circular compass-rose viewing plaza + the broadcast tower to the south
+  buildSummit();
+
+  // spawn on the summit
+  teleport(LNG0, LAT0, 40, -6);
+  ready = true; window.__fpsReady = true;
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('play').style.display = 'flex';
+}
+
+// ---- player + controls ----
+const controls = new PointerLockControls(camera, renderer.domElement);
+const player = { x: 0, y: 400, z: 0, vx: 0, vy: 0, vz: 0, onGround: false, bob: 0, stepBeat: 0 };
+const keys = new Set();
+let wantJump = false;
+const G = 20, JUMP = 6.6, WALK = 4.6, SPRINT = 1.85, ACCEL_G = 11, ACCEL_A = 2.5;
+
+function teleport(lng, lat, headingDeg, pitchDeg = 0) {
+  player.x = eastOf(lng); player.z = -northOf(lat);
+  player.y = groundAt(player.x, player.z) + EYE;
+  player.vx = player.vy = player.vz = 0; player.onGround = true;
+  const h = headingDeg * Math.PI / 180, p = (pitchDeg || 0) * Math.PI / 180;
+  camera.position.set(player.x, player.y, player.z);
+  camera.lookAt(
+    player.x + Math.sin(h) * Math.cos(p),
+    player.y + Math.sin(p),
+    player.z - Math.cos(h) * Math.cos(p)
+  );
+}
+
+// Gate pointer-lock behind a real hover+fine-pointer capability check (NOT user-agent
+// sniffing). Anything without a precise hover pointer — phones, tablets — gets the touch HUD.
+const CAN_LOCK = matchMedia('(hover: hover) and (pointer: fine)').matches;
+const TOUCH = !CAN_LOCK || location.search.includes('forcetouch');   // ?forcetouch=1 is test-only
+const touch = { move: false, mx: 0, my: 0, sprint: false };   // analog stick → step()
+
+const play = document.getElementById('play');
+const crosshair = document.getElementById('crosshair');
+const spotEl = document.getElementById('spot');
+const touchHud = document.getElementById('touchHud');
+const vignetteEl = document.getElementById('vignette');
+const edgeCueEl = document.getElementById('edgeCue');
+let edgeView = 0;                           // 0..1 boundary depth, driven by step(), shown by the render loop
+
+if (TOUCH) {
+  document.querySelector('#play .sub').innerHTML =
+    'left thumb to move · push out to sprint · drag right side to look · <kbd>jump</kbd> to hop<br/><br/>tap to enter';
+}
+
+function enterGame() {
+  play.style.display = 'none';
+  crosshair.style.display = 'block';
+  spotEl.style.display = 'block';
+  if (TOUCH) touchHud.style.display = 'block';
+  fadeAmbient(1);
+}
+play.addEventListener('click', () => {     // the tap/click is the audio-unblock gesture
+  initAudio();
+  if (TOUCH) enterGame(); else controls.lock();
+});
+controls.addEventListener('lock', enterGame);
+controls.addEventListener('unlock', () => {
+  play.style.display = 'flex';
+  crosshair.style.display = 'none';
+  fadeAmbient(0.18);                          // duck the hillside while paused
+});
+
+// ---- touch controls: left-thumb analog stick (move + push-to-sprint), right-side look ----
+const _euler = new THREE.Euler(0, 0, 0, 'YXZ'), PI2 = Math.PI / 2;
+function applyLook(dx, dy) {                  // mirrors PointerLockControls' euler maths for touch drag
+  _euler.setFromQuaternion(camera.quaternion);
+  _euler.y -= dx * 0.0042;
+  _euler.x -= dy * 0.0042;
+  _euler.x = Math.max(-PI2 + 0.02, Math.min(PI2 - 0.02, _euler.x));
+  camera.quaternion.setFromEuler(_euler);
+}
+if (TOUCH) {
+  const stick = document.getElementById('stick');
+  const knob = document.getElementById('stickKnob');
+  const pip = document.getElementById('sprintPip');
+  const btnJump = document.getElementById('btnJump');
+  const R = 52, SPR = 1.32;                   // knob radius (px); push past SPR×R to sprint
+  let stickId = null, ox = 0, oy = 0;         // active stick touch + its dynamic origin
+  let lookId = null, lx = 0, ly = 0;
+
+  function setStick(dx, dy) {
+    const len = Math.hypot(dx, dy);
+    const cl = Math.min(len, R);
+    const a = len > 0 ? Math.atan2(dy, dx) : 0;
+    const kx = Math.cos(a) * cl, ky = Math.sin(a) * cl;
+    knob.style.transform = `translate(${kx}px, ${ky}px)`;
+    touch.mx = cl > 0 ? (kx / R) : 0;
+    touch.my = cl > 0 ? (ky / R) : 0;
+    touch.move = len > 4;
+    touch.sprint = len > R * SPR;
+    pip.classList.toggle('on', touch.sprint);
+  }
+  function resetStick() {
+    knob.style.transform = 'translate(0,0)';
+    stick.classList.remove('live');
+    touch.move = false; touch.mx = touch.my = 0; touch.sprint = false;
+    pip.classList.remove('on');
+  }
+
+  btnJump.addEventListener('touchstart', e => {
+    e.preventDefault(); e.stopPropagation();
+    wantJump = true; btnJump.classList.add('press');
+  }, { passive: false });
+  btnJump.addEventListener('touchend', e => { e.preventDefault(); btnJump.classList.remove('press'); }, { passive: false });
+
+  addEventListener('touchstart', e => {
+    initAudio();                               // first touch also unblocks audio
+    for (const t of e.changedTouches) {
+      if (stickId === null && t.clientX < innerWidth * 0.45) {
+        stickId = t.identifier; ox = t.clientX; oy = t.clientY;
+        stick.style.left = (ox - 62) + 'px';   // recenter the base under the thumb
+        stick.style.top = (oy - 62) + 'px';
+        stick.style.bottom = 'auto';
+        stick.classList.add('live');
+        setStick(0, 0);
+      } else if (lookId === null) {
+        lookId = t.identifier; lx = t.clientX; ly = t.clientY;
+      }
+    }
+  }, { passive: false });
+
+  addEventListener('touchmove', e => {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+      if (t.identifier === stickId) setStick(t.clientX - ox, t.clientY - oy);
+      else if (t.identifier === lookId) {
+        applyLook(t.clientX - lx, t.clientY - ly);
+        lx = t.clientX; ly = t.clientY;
+      }
+    }
+  }, { passive: false });
+
+  function endTouch(e) {
+    for (const t of e.changedTouches) {
+      if (t.identifier === stickId) { stickId = null; resetStick(); }
+      else if (t.identifier === lookId) lookId = null;
+    }
+  }
+  addEventListener('touchend', endTouch);
+  addEventListener('touchcancel', endTouch);
+
+  // visual-only demo of an engaged stick (for the headless phone screenshot — no real movement)
+  window.__demoStick = () => { stick.classList.add('live'); knob.style.transform = 'translate(30px,-30px)'; };
+}
+
+addEventListener('keydown', e => {
+  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  keys.add(k);
+  if (k === 'Shift') keys.add('shift');
+  if (k === ' ') { wantJump = true; e.preventDefault(); }
+});
+addEventListener('keyup', e => {
+  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  keys.delete(k);
+  if (k === 'Shift') keys.delete('shift');
+});
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ---- sound: footsteps + summer-hillside ambient (Web Audio, all procedural) ----
+// Browsers block audio until a user gesture, so the AudioContext is built on the
+// click-to-enter. Everything is synthesised — no asset files, page stays self-contained.
+let audio = null;
+function initAudio() {
+  if (audio) { if (audio.ctx.state === 'suspended') audio.ctx.resume(); fadeAmbient(1); return; }
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return null;
+  const ctx = new Ctx();
+  const master = ctx.createGain(); master.gain.value = 0; master.connect(ctx.destination);
+  master.gain.setTargetAtTime(0.9, ctx.currentTime, 1.4);          // gentle fade-in
+
+  // one shared 2 s noise buffer (deterministic; reused by every layer)
+  const noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+  const nd = noiseBuf.getChannelData(0);
+  let seed = 1234567;
+  for (let i = 0; i < nd.length; i++) { seed = (seed * 16807) % 2147483647; nd[i] = seed / 1073741823.5 - 1; }
+
+  const ambient = ctx.createGain(); ambient.gain.value = 1; ambient.connect(master);
+
+  // insect bed — high bandpassed noise with a fast tremolo (a chorus of crickets/cicadas)
+  const ins = ctx.createBufferSource(); ins.buffer = noiseBuf; ins.loop = true;
+  const insBp = ctx.createBiquadFilter(); insBp.type = 'bandpass'; insBp.frequency.value = 4900; insBp.Q.value = 7;
+  const insG = ctx.createGain(); insG.gain.value = 0.05;
+  const trem = ctx.createOscillator(); trem.type = 'sine'; trem.frequency.value = 7.3;
+  const tremG = ctx.createGain(); tremG.gain.value = 0.028;
+  trem.connect(tremG); tremG.connect(insG.gain);
+  ins.connect(insBp); insBp.connect(insG); insG.connect(ambient);
+  ins.start(); trem.start();
+
+  // low air/wind bed — lowpassed noise with a slow swell so the loop never reads as seamed
+  const wind = ctx.createBufferSource(); wind.buffer = noiseBuf; wind.loop = true;
+  const windLp = ctx.createBiquadFilter(); windLp.type = 'lowpass'; windLp.frequency.value = 430; windLp.Q.value = 0.6;
+  const windG = ctx.createGain(); windG.gain.value = 0.055;
+  const windLfo = ctx.createOscillator(); windLfo.type = 'sine'; windLfo.frequency.value = 0.06;
+  const windLfoG = ctx.createGain(); windLfoG.gain.value = 0.03;
+  windLfo.connect(windLfoG); windLfoG.connect(windG.gain);
+  wind.connect(windLp); windLp.connect(windG); windG.connect(ambient);
+  wind.start(); windLfo.start();
+
+  audio = { ctx, master, ambient, noiseBuf, nextBird: ctx.currentTime + 2 };
+  return audio;
+}
+function fadeAmbient(to) { if (audio) audio.master.gain.setTargetAtTime(to * 0.9, audio.ctx.currentTime, 0.4); }
+
+// a footfall: a short filtered noise crunch; sprint shifts it brighter/quicker
+function footstep(intensity = 1, sprint = false) {
+  if (!audio || audio.ctx.state !== 'running') return;
+  const ctx = audio.ctx, t = ctx.currentTime;
+  const src = ctx.createBufferSource(); src.buffer = audio.noiseBuf;
+  src.playbackRate.value = (sprint ? 1.28 : 1.0) * (0.9 + Math.random() * 0.2);
+  const bp = ctx.createBiquadFilter(); bp.type = 'bandpass';
+  bp.frequency.value = (sprint ? 330 : 240) + Math.random() * 90; bp.Q.value = 0.8;
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1900;
+  const g = ctx.createGain();
+  const peak = Math.max(0.05, (sprint ? 0.5 : 0.38) * intensity);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(peak, t + 0.006);
+  g.gain.exponentialRampToValueAtTime(0.0006, t + 0.17);
+  src.connect(bp); bp.connect(lp); lp.connect(g); g.connect(audio.master);
+  src.start(t); src.stop(t + 0.22);
+}
+
+// an occasional bird — a few quick swept sine blips
+function chirp() {
+  if (!audio || audio.ctx.state !== 'running') return;
+  const ctx = audio.ctx, t = ctx.currentTime;
+  const notes = 2 + Math.floor(Math.random() * 3);
+  const base = 2300 + Math.random() * 1700;
+  const g = ctx.createGain(); g.gain.value = 0; g.connect(audio.master);
+  const o = ctx.createOscillator(); o.type = 'sine'; o.connect(g);
+  let tt = t;
+  for (let i = 0; i < notes; i++) {
+    const f = base * (1 + (Math.random() - 0.3) * 0.25);
+    o.frequency.setValueAtTime(f, tt);
+    o.frequency.linearRampToValueAtTime(f * (1.1 + Math.random() * 0.2), tt + 0.05);
+    g.gain.setValueAtTime(0.0001, tt);
+    g.gain.linearRampToValueAtTime(0.055, tt + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0008, tt + 0.09);
+    tt += 0.10 + Math.random() * 0.05;
+  }
+  o.start(t); o.stop(tt + 0.05);
+}
+
+// ---- physics + render loop ----
+const fwd = new THREE.Vector3(), right = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+const clock = new THREE.Clock();
+
+function step(dt) {
+  // movement direction in camera-yaw space (flattened)
+  camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
+  right.crossVectors(fwd, up).normalize();
+  let mx = 0, mz = 0;
+  let f = (keys.has('w') ? 1 : 0) - (keys.has('s') ? 1 : 0);
+  let s = (keys.has('d') ? 1 : 0) - (keys.has('a') ? 1 : 0);
+  let sprint = keys.has('shift'), analog = 1;
+  if (touch.move) {                            // analog stick overrides keys: magnitude → walk speed
+    s = touch.mx; f = -touch.my;               // stick up (screen −y) = forward, right = strafe right
+    analog = Math.min(1, Math.hypot(f, s));
+    sprint = touch.sprint;
+  }
+  mx = fwd.x * f + right.x * s; mz = fwd.z * f + right.z * s;
+  const ml = Math.hypot(mx, mz); if (ml > 0) { mx /= ml; mz /= ml; }
+
+  // boundary depth at the START of the frame (0 inside the park → 1 at the rim). Drives an
+  // input-speed falloff (your legs give out as you wade into the edge) so the stop is decisive
+  // but soft, plus the inward push / fog / cue below.
+  const r0 = Math.hypot(player.x, player.z);
+  const edge = r0 > EDGE_START ? Math.min(1, (r0 - EDGE_START) / (BOUND - EDGE_START)) : 0;
+
+  const speed = WALK * (sprint ? SPRINT : 1) * analog * (1 - 0.9 * edge);
+  const accel = player.onGround ? ACCEL_G : ACCEL_A;       // momentum on the ground, drift in the air
+  const k = Math.min(1, accel * dt);
+  player.vx += (mx * speed - player.vx) * k;
+  player.vz += (mz * speed - player.vz) * k;
+
+  player.x += player.vx * dt; player.z += player.vz * dt;
+
+  // soft boundary — instead of a silent wall, the park edge reads intentional: as you wade
+  // into the margin (EDGE_START→BOUND) the world mists in, a vignette closes, a "turn back"
+  // cue fades up, your legs give out (speed falloff above) and a gentle inward drift turns you
+  // around. The radial clamp at BOUND is just a backstop that's now rarely reached.
+  const r = Math.hypot(player.x, player.z);
+  if (r > EDGE_START) {
+    const nx = player.x / r, nz = player.z / r;             // outward radial unit
+    const push = EDGE_PUSH * edge * dt;                     // inward drift, stronger near the rim
+    player.vx -= nx * push; player.vz -= nz * push;
+  }
+  if (r > BOUND) {                                          // hard backstop (now rarely reached)
+    const s2 = BOUND / r; player.x *= s2; player.z *= s2;
+    player.vx *= 0.3; player.vz *= 0.3;
+  }
+  // Visual intensity saturates near the practical stop depth (the speed falloff + push stall
+  // you around edge≈0.35), so the mist/vignette/cue read FULLY while the stop itself stays soft.
+  edgeView = Math.min(1, edge / 0.38);
+  scene.fog.near = FOG_NEAR0 - edgeView * 200;              // world closes in at the edge
+  scene.fog.far = FOG_FAR0 - edgeView * 1180;
+
+  // gravity + ground
+  if (wantJump && player.onGround) { player.vy = JUMP; player.onGround = false; }
+  wantJump = false;
+  player.vy -= G * dt; player.y += player.vy * dt;
+  const ground = groundAt(player.x, player.z) + EYE;
+  if (player.y <= ground) { player.y = ground; player.vy = 0; player.onGround = true; }
+  else player.onGround = false;
+
+  // subtle head bob when walking on the ground
+  const hsp = Math.hypot(player.vx, player.vz);
+
+  // sprint FOV kick — driven by ACTUAL ground speed (not the key) so it ramps with momentum
+  // and only kicks above walking pace; silent while airborne so a sprint-jump doesn't punch out.
+  const over = player.onGround ? Math.max(0, hsp - WALK) / (WALK * SPRINT - WALK) : 0;
+  const targetFov = BASE_FOV + FOV_KICK * Math.min(1, over);
+  const nf = camera.fov + (targetFov - camera.fov) * Math.min(1, FOV_LERP * dt);
+  if (Math.abs(nf - camera.fov) > 1e-3) { camera.fov = nf; camera.updateProjectionMatrix(); }
+  let bobY = 0;
+  if (player.onGround && hsp > 0.3) {
+    player.bob += hsp * dt * 1.9;
+    bobY = Math.sin(player.bob) * 0.045 * Math.min(1, hsp / WALK);
+  }
+  camera.position.set(player.x, player.y + bobY, player.z);
+
+  // footstep on each stride beat: a footfall every half bob-cycle (π). Bob only advances
+  // while grounded + moving, so this is naturally silent in the air and faster when sprinting.
+  if (player.onGround && hsp > 0.6) {
+    const beat = Math.floor(player.bob / Math.PI);
+    if (beat > player.stepBeat) footstep(Math.min(1, hsp / WALK), keys.has('shift'));
+    player.stepBeat = beat;
+  } else {
+    player.stepBeat = Math.floor(player.bob / Math.PI);   // resync so resuming never double-steps
+  }
+}
+
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  if (ready && !window.__pauseSim) step(dt);
+  // boundary atmosphere (driven off step()'s edgeView; written here so the test's tight
+  // fixed-timestep loops don't thrash the DOM)
+  vignetteEl.style.opacity = edgeView.toFixed(3);
+  edgeCueEl.style.opacity = edgeView > 0.25 ? '1' : '0';
+  // occasional birdsong, scheduled off the audio clock (2.5–9.5 s apart, sometimes skipped)
+  if (audio && audio.ctx.state === 'running' && audio.ctx.currentTime > audio.nextBird) {
+    if (Math.random() < 0.7) chirp();
+    audio.nextBird = audio.ctx.currentTime + 2.5 + Math.random() * 7;
+  }
+  renderer.render(scene, camera);
+});
+
+// ---- test hooks (headless screenshot + physics harness) ----
+window.__look = (lng, lat, heading, pitch) => teleport(lng, lat, heading, pitch);
+window.__player = player;
+window.__key = (k, down) => { if (down) keys.add(k); else keys.delete(k); };
+window.__jump = () => { wantJump = true; };
+window.__groundY = () => groundAt(player.x, player.z) + EYE;
+window.__fov = () => camera.fov;            // sprint FOV-kick check for the headless harness
+window.__edge = () => ({ edge: +edgeView.toFixed(3), r: +Math.hypot(player.x, player.z).toFixed(1), fogFar: +scene.fog.far.toFixed(0) });
+window.__step = (dt) => step(dt);       // fixed-timestep drive for deterministic physics tests
+window.__pauseSim = false;
+window.__fpsReady = false;
+window.__touchMode = TOUCH;                 // true on coarse-pointer devices (touch HUD shown)
+window.__treeCount = () => TREES;           // forest sanity check for the headless harness
+window.__hasSummit = () => PLAZA_TOP !== null;   // plaza/tower built
+window.__hasFountain = () => !!__fountain;       // "Joy" bronze fountain built
+// audio harness (headless can't hear — these confirm the graph wires up without throwing)
+window.__initAudio = () => { initAudio(); return window.__audioState(); };
+window.__audioState = () => audio ? { state: audio.ctx.state, sampleRate: audio.ctx.sampleRate, masterGain: audio.master.gain.value } : null;
+window.__footstep = (sprint) => footstep(1, !!sprint);
+window.__chirp = () => chirp();
+
+build().catch(e => {
+  document.getElementById('loading').textContent = 'failed to build: ' + e.message;
+  console.error(e);
+});
 </script>
 </body>
 </html>
