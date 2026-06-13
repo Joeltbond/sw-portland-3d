@@ -514,16 +514,31 @@ function plantForest() {
       if (Math.hypot(x - TOWER.x, z - TOWER.z) < 8) continue; // clear a pad at the tower base
       const lng = lngOf(x), lat = latOf(-z);
       if (!isForest(lng, lat)) continue;
-      placements.push([x, z, 0.72 + rnd() * 0.8, rnd() * Math.PI * 2]);  // x, z, scale, yaw
+      // species mix (refs: oregonhikers + Portland.gov — "Douglas-fir, western red-cedar and
+      // big-leaf maples dominate the canopy"): mostly fir, a fifth cedar, an eighth broadleaf.
+      const sr = rnd();
+      const sp = sr < 0.68 ? 0 : sr < 0.87 ? 1 : 2;          // 0 fir, 1 cedar, 2 bigleaf maple
+      placements.push([x, z, 0.72 + rnd() * 0.8, rnd() * Math.PI * 2, sp]);
     }
   }
   TREES = placements.length;
   if (!TREES) return;
 
-  // one conifer = 3 stacked cones (narrow Douglas-fir silhouette) + a short trunk
-  const tier = (rad, h, y) => { const c = new THREE.ConeGeometry(rad, h, 7); c.translate(0, y, 0); return c; };
-  const foliageGeo = mergeGeometries([tier(2.0, 3.8, 1.9), tier(1.5, 3.3, 3.7), tier(0.9, 2.9, 5.7)]);
-  const trunkGeo = new THREE.CylinderGeometry(0.18, 0.30, 1.8, 5); trunkGeo.translate(0, 0.9, 0);
+  // ---- three species, so the ring stops reading as a wall of identical cones ----
+  const cone = (rad, h, y) => { const c = new THREE.ConeGeometry(rad, h, 7); c.translate(0, y, 0); return c; };
+  const blob = (rad, x, y, z) => { const s = new THREE.IcosahedronGeometry(rad, 1); s.scale(1.05, 0.82, 1.05); s.translate(x, y, z); return s; };
+  // 0: Douglas-fir — narrow stacked cones (the dominant silhouette)
+  const firGeo = mergeGeometries([cone(2.0, 3.8, 1.9), cone(1.5, 3.3, 3.7), cone(0.9, 2.9, 5.7)]);
+  // 1: western red cedar — fuller, broader, denser plume with a soft rounded top
+  const cedarGeo = mergeGeometries([cone(2.7, 3.4, 1.5), cone(2.3, 3.2, 3.0), cone(1.7, 3.0, 4.6), cone(1.0, 2.5, 6.1)]);
+  // 2: bigleaf maple — rounded deciduous crown (overlapping low-poly blobs) on a tall bare trunk
+  const mapleGeo = mergeGeometries([blob(2.7, 0, 5.7, 0), blob(2.0, 1.7, 5.1, 0.4), blob(1.9, -1.5, 5.3, -0.6), blob(1.7, 0.3, 6.9, 1.0)]);
+  const FOLIAGE = [firGeo, cedarGeo, mapleGeo];
+  // conifer trunk (short, hidden under low conifer skirts) vs maple trunk (taller, bare, visible)
+  const coniferTrunk = new THREE.CylinderGeometry(0.18, 0.30, 1.8, 5); coniferTrunk.translate(0, 0.9, 0);
+  const mapleTrunk = new THREE.CylinderGeometry(0.22, 0.42, 4.4, 6); mapleTrunk.translate(0, 2.2, 0);
+  const TRUNKS = [coniferTrunk, coniferTrunk, mapleTrunk];
+
   // emissive floor: Lambert drives the NE-facing (away-from-sun) sides toward pure black,
   // which reads as dead silhouettes; a dim forest-green emissive lifts the shadow side off
   // black so the canopy keeps depth instead of flattening into a wall of dark cut-outs.
@@ -532,6 +547,8 @@ function plantForest() {
   // wind sway: displace the crown (base/trunk stays planted via the height weight) by a slow
   // wave phased on each tree's world position, so a gust rolls across the whole forest. Mirrors
   // the grass sway (#17) but slower/smaller — big firs barely move at the base, tips drift.
+  // One shared material across all three species → one treeWind uniform; per-species colour
+  // rides instanceColor instead, so the maples come out a warmer summer green than the firs.
   foliageMat.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = { value: 0 }; treeWind = sh.uniforms.uTime;
     sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace(
@@ -547,27 +564,34 @@ function plantForest() {
        transformed.x += sin(uTime * 0.9 + ph) * sway * 0.035;
        transformed.z += cos(uTime * 0.7 + ph * 1.3) * sway * 0.028;`);
   };
-  const foliage = new THREE.InstancedMesh(foliageGeo, foliageMat, TREES);
-  const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, TREES);
 
+  // partition placements by species so each gets its own InstancedMesh (one geometry per mesh)
   const dummy = new THREE.Object3D(), tint = new THREE.Color();
-  for (let i = 0; i < TREES; i++) {
-    const [x, z, s, yaw] = placements[i];
-    const gy = groundAt(x, z);
-    dummy.position.set(x, gy - 0.25, z);
-    dummy.rotation.set(0, yaw, 0);
-    dummy.scale.set(s, s, s);
-    dummy.updateMatrix();
-    foliage.setMatrixAt(i, dummy.matrix);
-    trunks.setMatrixAt(i, dummy.matrix);
-    // subtle per-tree tint so the canopy isn't one flat green
-    tint.setHSL(0.27 + (rnd() - 0.5) * 0.04, 0.34, 0.24 + (rnd() - 0.5) * 0.06);
-    foliage.setColorAt(i, tint);
+  for (let sp = 0; sp < 3; sp++) {
+    const group = placements.filter(p => p[4] === sp);
+    if (!group.length) continue;
+    const foliage = new THREE.InstancedMesh(FOLIAGE[sp], foliageMat, group.length);
+    const trunks = new THREE.InstancedMesh(TRUNKS[sp], trunkMat, group.length);
+    for (let i = 0; i < group.length; i++) {
+      const [x, z, s, yaw] = group[i];
+      const gy = groundAt(x, z);
+      dummy.position.set(x, gy - 0.25, z);
+      dummy.rotation.set(0, yaw, 0);
+      dummy.scale.set(s, s, s);
+      dummy.updateMatrix();
+      foliage.setMatrixAt(i, dummy.matrix);
+      trunks.setMatrixAt(i, dummy.matrix);
+      // per-tree tint, biased by species: firs dark blue-green, cedar a touch warmer,
+      // bigleaf maple a distinctly lighter, more saturated summer-foliage green.
+      const t = sp === 2 ? { h: 0.22, s: 0.46, l: 0.34 } : sp === 1 ? { h: 0.25, s: 0.38, l: 0.27 } : { h: 0.27, s: 0.34, l: 0.24 };
+      tint.setHSL(t.h + (rnd() - 0.5) * 0.04, t.s, t.l + (rnd() - 0.5) * 0.06);
+      foliage.setColorAt(i, tint);
+    }
+    foliage.instanceMatrix.needsUpdate = true;
+    trunks.instanceMatrix.needsUpdate = true;
+    if (foliage.instanceColor) foliage.instanceColor.needsUpdate = true;
+    scene.add(foliage, trunks);
   }
-  foliage.instanceMatrix.needsUpdate = true;
-  trunks.instanceMatrix.needsUpdate = true;
-  if (foliage.instanceColor) foliage.instanceColor.needsUpdate = true;
-  scene.add(foliage, trunks);
 }
 
 // ---- summit lawn: wind-stirred grass tufts on the open grassy crown ----

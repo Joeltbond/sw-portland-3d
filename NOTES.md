@@ -59,6 +59,32 @@ harnesses now point there). shoot-fps.js loads `index.html`. New game work happe
   hill. NOT YET DONE — do this before trees/landmarks; record refs used here.
 
 ## Iteration log
+- **#23 (2026-06-12)** TREE SPECIES VARIETY — the deepest remaining "real place" win (backlog #1/#9):
+  the forest ring was ~11.9k IDENTICAL narrow Douglas-fir cones, reading as a wall of clones. **Refs:**
+  WebSearch → oregonhikers (Marquam Trail to Council Crest) + Portland.gov — "Douglas-fir, western
+  red-cedar and big-leaf maples dominate the canopy," with western hemlock + vine maple in the
+  understory. Split the single fir geometry into **three species**, assigned per-instance by PRNG
+  (~68% fir / 19% cedar / 13% bigleaf maple): **(0) Douglas-fir** — the existing 3 narrow stacked
+  cones. **(1) western red cedar** — a fuller, broader, denser 4-cone plume with a soft rounded top.
+  **(2) bigleaf maple** — a ROUNDED deciduous crown (4 overlapping squashed low-poly icosahedron
+  "blobs", `scale(1.05,0.82,1.05)`) on a **taller bare trunk** (4.4 m vs the conifers' 1.8 m), so its
+  silhouette is unmistakably broadleaf against the conifers. plantForest now **partitions placements
+  by species** and builds one foliage + one trunk `InstancedMesh` per species (geometry is per-mesh;
+  conifer trunk reused for fir+cedar, maple gets its own). **All three foliage meshes SHARE one
+  material** (so there's still exactly one `treeWind` sway uniform ticked per frame — zero new
+  per-frame cost); the per-species COLOUR rides `instanceColor` instead: firs dark blue-green (HSL
+  h.27/s.34/l.24), cedar a touch warmer (h.25/s.38/l.27), maple a distinctly lighter, more saturated
+  summer green (h.22/s.46/l.34) — so the canopy now varies in BOTH form and hue. Verified headless:
+  exit 0, trees **11923**, grass 4670, summit/fountain/water/path all true, FOV kick + edge + pause
+  intact, all 17 harness views render, no page/console errors. `fps-canopy.png` (looking up the
+  wooded slope toward the summit) shows rounded maple crowns clearly interspersed among the pointed
+  conifers against the sky, broadcast tower at right — the ring no longer reads as clones; the old
+  `fps-slope.png` foreground firs are unchanged. Gotchas: (a) **share the material across species or
+  the sway uniform fragments** — each `onBeforeCompile` makes its own uniform, so I run it once on the
+  one shared `foliageMat` and let `instanceColor` carry the species tint; (b) the sway weight
+  `max(position.y−1, 0)` means the maple's higher crown (y≈5–7) drifts a bit more than the firs —
+  realistic (floppier broadleaf), no fix needed. Possible polish: a few western-hemlock droopy-leader
+  silhouettes, autumn-tint a fraction of the maples, billboard-LOD the far ring.
 - **#22 (2026-06-12, Joel-directed via FEEDBACK.md)** BACKDROP SEAM FIX + WATER TANK — drained both
   pending feedback items in one pass.
   **(1) Backdrop seam.** Joel saw "a weird seam where the two ends of the background backdrop meet."
@@ -518,11 +544,12 @@ Boundary (#15) + pause/help (#20) are now done too — remaining work is pure wo
 0b. ~~**Richer illustrated backdrop**~~ — DONE in #9 (painted panorama cylinder: real-bearing
    Cascade peaks + layered ridgelines, Hood is the hero). Possible polish: clouds/alpenglow,
    parallax, sharper peak rock/snow texture, time-of-day tint matching the sun.
-1. ~~**Trees / forest**~~ — DONE in #10 (~11.8k instanced Douglas-firs, planted on the
-   imagery's green mask, summit clearing kept open); ~~wind sway~~ + ~~soften the near-black
-   shaded sides~~ DONE in #19 (vertex-shader crown sway + emissive green floor). Possible
-   polish: vary species (add broadleaf/cedar shapes), billboard-LOD the far trees, thin the
-   canopy a touch if it feels too uniform on the live page.
+1. ~~**Trees / forest**~~ — DONE in #10 (~11.9k instanced conifers, planted on the imagery's green
+   mask, summit clearing kept open); ~~wind sway~~ + ~~soften the near-black shaded sides~~ DONE in
+   #19 (vertex-shader crown sway + emissive green floor); ~~vary species~~ DONE in #23 (fir + western
+   red cedar + bigleaf maple, per-instance, varying form AND hue). Possible polish: a few western-
+   hemlock droopy silhouettes, autumn-tint some maples, billboard-LOD the far ring, thin the canopy a
+   touch if it feels too uniform on the live page.
 2. ~~**Sharpen the near foreground**~~ — DONE in #12 (procedural luminance grain modulating
    the satellite drape, strong underfoot, faded by ~180 m, hue-neutral & world-space tiled).
    Possible polish: a matching ground normal map for relief; wind-stirred grass billboards on
@@ -550,8 +577,9 @@ Boundary (#15) + pause/help (#20) are now done too — remaining work is pure wo
    .html + its harnesses entirely once Joel's sure he wants no map fallback at all.
 8. **Perf**: the DEM/imagery refetch on every load; consider caching or a lower first-paint
    then upgrade. Build is ~17 s under swiftshader, faster on real bandwidth.
-9. **Foliage / world polish** (the deepest remaining "real place" wins): vary tree species
-   (broadleaf/cedar shapes); jetting fountain water + patina. ~~Soft TREE wind sway + soften
+9. **Foliage / world polish** (the deepest remaining "real place" wins): ~~vary tree species
+   (broadleaf/cedar shapes)~~ DONE in #23 (fir/cedar/maple mix); jetting fountain water + patina.
+   ~~Soft TREE wind sway + soften
    the near-black shaded cone sides~~ DONE in #19. ~~Wind-stirred grass on the summit lawn~~ DONE in #17
    (5055 instanced sway-shader tufts on the open crown). Grass polish: a ground normal map
    under it, longer/thinner blades at the rim, seasonal dry-grass tan.
