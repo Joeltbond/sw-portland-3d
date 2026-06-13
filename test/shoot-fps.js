@@ -43,6 +43,7 @@ const VIEWS = [
     } catch (e) { return { error: e.message }; }
   });
   console.log('audio:', JSON.stringify(audio));
+  console.log('trees:', await page.evaluate(() => window.__treeCount && window.__treeCount()));
 
   for (const [file, lng, lat, heading, pitch] of VIEWS) {
     await page.evaluate((lng, lat, heading, pitch) => window.__look(lng, lat, heading, pitch),

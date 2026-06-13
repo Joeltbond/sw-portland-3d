@@ -54,6 +54,23 @@ hooks instead: `window.__pauseSim=true; window.__step(1/60)` in a loop, read
   hill. NOT YET DONE — do this before trees/landmarks; record refs used here.
 
 ## Iteration log
+- **#10 (18:05–18:18)** FOREST — the biggest "real place" win (backlog #1). Council Crest
+  is an open grassy summit lawn ringed by Douglas-fir + western red cedar (refs: Portland.gov
+  + oregonhikers + audiala — confirmed the ringed-clearing form, 1073 ft); the satellite drape
+  showed canopy from above but eye level read as flat green. Now ~11.8k instanced conifers
+  give the hill real depth. **Where to plant is read from the imagery itself:** sample the
+  stitched Esri canvas (`SAT.ctx.getImageData`) per candidate and keep green-dominant, mid-dark
+  pixels (`g>r*1.04 && g>=b-4 && 42<bright<150`) — that masks trees onto the actual canopy and
+  off the lawn/roads/roofs. Jittered 9 m grid, thinned ~40%, **summit clearing kept open
+  (r<75 m)** so the level matches the real grassy crown, capped to the boundary (r<BOUND−8).
+  **Each fir = 3 stacked cones** (narrow Douglas silhouette) via `mergeGeometries` + a short
+  trunk cylinder, two **InstancedMesh**es (foliage + trunks) sharing one per-instance matrix;
+  per-tree HSL tint jitter so the canopy isn't one flat green; deterministic PRNG → identical
+  every load. Fog (350–1850 m) fades distant trees for free. Verified headless (slope shot:
+  firs with real silhouettes/trunks looking back up the wooded hill; summit-down: the conifer
+  ring around the open clearing; Hood hero still frames clean), 11768 trees, no page/console
+  errors. Gotcha: InstancedMesh needs `instanceColor.needsUpdate` after `setColorAt`.
+  Test hook `__treeCount`; harness prints the count.
 - **#9 (17:46–17:56)** RICHER BACKGROUND — illustrated distant backdrop (Joel 17:28: "make
   the background richer… we'll need an illustration"). Painted a 360° panorama onto a canvas
   and wrapped it on a **BackSide cylinder** (R=3500, h=3000, fog-exempt) sitting beyond the
@@ -201,15 +218,18 @@ hooks instead: `window.__pauseSim=true; window.__step(1/60)` in a loop, read
    *Refs used so far (#9, sightlines):* Portland.gov Council Crest page + oregonhikers
    field guide + Wikipedia — confirmed the five-Cascade-peak view (Hood E, St Helens &
    Rainier NNE, Adams NE, Jefferson SE), the summit compass rose, downtown/Tualatin valley.
-   Still NOT done: ON-SUMMIT photo refs (plaza/fountain/towers/firs) for trees + landmarks.
+   *(#10, forest):* Portland.gov + oregonhikers + audiala — confirmed the open grassy summit
+   lawn RINGED by Douglas-fir + western red cedar, 1073 ft (drove the tree mask + clearing).
+   Still NOT done: ON-SUMMIT photo refs (circular brick plaza/fountain/broadcast towers) for
+   the landmark geometry in #3.
 0b. ~~**Richer illustrated backdrop**~~ — DONE in #9 (painted panorama cylinder: real-bearing
    Cascade peaks + layered ridgelines, Hood is the hero). Possible polish: clouds/alpenglow,
    parallax, sharper peak rock/snow texture, time-of-day tint matching the sun.
-1. **Trees / forest** — the single biggest "real place" win. The satellite drape shows
-   canopy from above but eye-level reads as smooth green ground. Instance Douglas-fir
-   billboards/low-poly cones from OSM `landuse=forest`/`natural=wood` polygons (or just
-   scatter on terrain where the texture is green), density-faded with distance. This is
-   what makes the hill feel forested instead of a textured blob.
+1. ~~**Trees / forest**~~ — DONE in #10 (~11.8k instanced Douglas-firs, planted on the
+   imagery's green mask, summit clearing kept open). Possible polish: vary species (add
+   broadleaf/cedar shapes), wind sway, billboard-LOD the far trees, soften the hard cone
+   shading (they read near-black on shadowed sides), and thin the canopy a touch if it feels
+   too uniform on the live page.
 2. **Sharpen the near foreground** — even at z17 the immediate ground under the eye is
    soft (grazing-angle minification). Options: a tiling detail/noise texture blended in
    near the camera, a ground normal map, or a subtle near vignette so the eye reads it
