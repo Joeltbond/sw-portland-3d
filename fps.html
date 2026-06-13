@@ -5,7 +5,8 @@
   <title>Council Crest — first person</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <style>
-    html, body { margin: 0; height: 100%; overflow: hidden; background: #1a2230; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #1a2230;
+      touch-action: none; overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
     canvas { display: block; }
     #ui { position: absolute; inset: 0; pointer-events: none; font: 14px/1.5 -apple-system, system-ui, sans-serif; color: #eaf0f4; }
     #crosshair {
@@ -39,6 +40,36 @@
       position: absolute; right: 6px; bottom: 5px; font-size: 10px; color: rgba(255,255,255,.55);
       text-shadow: 0 1px 2px rgba(0,0,0,.6);
     }
+    /* ---- touch HUD (phones / coarse pointers only) ---- */
+    #touchHud { position: absolute; inset: 0; display: none; pointer-events: none; }
+    #stick {
+      position: absolute; left: 30px; bottom: 44px; width: 124px; height: 124px;
+      border-radius: 50%; border: 2px solid rgba(255,255,255,.30);
+      background: rgba(15,18,22,.20); opacity: .5; transition: opacity .14s;
+      -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+    }
+    #stick.live { opacity: .9; }
+    #stickKnob {
+      position: absolute; left: 50%; top: 50%; width: 54px; height: 54px;
+      margin: -27px 0 0 -27px; border-radius: 50%;
+      background: rgba(255,255,255,.46); box-shadow: 0 1px 7px rgba(0,0,0,.45);
+    }
+    #btnJump {
+      position: absolute; right: 32px; bottom: 52px; width: 86px; height: 86px;
+      border-radius: 50%; border: 1px solid rgba(255,255,255,.24);
+      background: rgba(15,18,22,.32); color: #eaf0f4; font-weight: 600; font-size: 13px;
+      letter-spacing: .12em; text-transform: uppercase; pointer-events: auto;
+      display: flex; align-items: center; justify-content: center;
+      user-select: none; -webkit-user-select: none;
+      -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px);
+    }
+    #btnJump.press { background: rgba(120,162,212,.5); }
+    #sprintPip {
+      position: absolute; left: 30px; bottom: 178px; width: 124px; text-align: center;
+      font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: #c4e2ff;
+      opacity: 0; transition: opacity .12s; text-shadow: 0 1px 2px rgba(0,0,0,.65);
+    }
+    #sprintPip.on { opacity: 1; }
   </style>
 </head>
 <body>
@@ -46,6 +77,11 @@
   <div id="crosshair" style="display:none"></div>
   <div id="spot" style="display:none">◈ Council Crest Summit</div>
   <div id="attr">Terrain: Mapzen/AWS · Imagery © Esri, Maxar, Earthstar</div>
+  <div id="touchHud">
+    <div id="sprintPip">▲ sprint</div>
+    <div id="stick"><div id="stickKnob"></div></div>
+    <div id="btnJump">jump</div>
+  </div>
 </div>
 <div id="loading">building Council Crest…</div>
 <div id="play">
@@ -227,19 +263,122 @@ function teleport(lng, lat, headingDeg, pitchDeg = 0) {
   );
 }
 
+// Gate pointer-lock behind a real hover+fine-pointer capability check (NOT user-agent
+// sniffing). Anything without a precise hover pointer — phones, tablets — gets the touch HUD.
+const CAN_LOCK = matchMedia('(hover: hover) and (pointer: fine)').matches;
+const TOUCH = !CAN_LOCK || location.search.includes('forcetouch');   // ?forcetouch=1 is test-only
+const touch = { move: false, mx: 0, my: 0, sprint: false };   // analog stick → step()
+
 const play = document.getElementById('play');
-play.addEventListener('click', () => { initAudio(); controls.lock(); });   // the click is the audio gesture
-controls.addEventListener('lock', () => {
+const crosshair = document.getElementById('crosshair');
+const spotEl = document.getElementById('spot');
+const touchHud = document.getElementById('touchHud');
+
+if (TOUCH) {
+  document.querySelector('#play .sub').innerHTML =
+    'left thumb to move · push out to sprint · drag right side to look · <kbd>jump</kbd> to hop<br/><br/>tap to enter';
+}
+
+function enterGame() {
   play.style.display = 'none';
-  document.getElementById('crosshair').style.display = 'block';
-  document.getElementById('spot').style.display = 'block';
+  crosshair.style.display = 'block';
+  spotEl.style.display = 'block';
+  if (TOUCH) touchHud.style.display = 'block';
   fadeAmbient(1);
+}
+play.addEventListener('click', () => {     // the tap/click is the audio-unblock gesture
+  initAudio();
+  if (TOUCH) enterGame(); else controls.lock();
 });
+controls.addEventListener('lock', enterGame);
 controls.addEventListener('unlock', () => {
   play.style.display = 'flex';
-  document.getElementById('crosshair').style.display = 'none';
+  crosshair.style.display = 'none';
   fadeAmbient(0.18);                          // duck the hillside while paused
 });
+
+// ---- touch controls: left-thumb analog stick (move + push-to-sprint), right-side look ----
+const _euler = new THREE.Euler(0, 0, 0, 'YXZ'), PI2 = Math.PI / 2;
+function applyLook(dx, dy) {                  // mirrors PointerLockControls' euler maths for touch drag
+  _euler.setFromQuaternion(camera.quaternion);
+  _euler.y -= dx * 0.0042;
+  _euler.x -= dy * 0.0042;
+  _euler.x = Math.max(-PI2 + 0.02, Math.min(PI2 - 0.02, _euler.x));
+  camera.quaternion.setFromEuler(_euler);
+}
+if (TOUCH) {
+  const stick = document.getElementById('stick');
+  const knob = document.getElementById('stickKnob');
+  const pip = document.getElementById('sprintPip');
+  const btnJump = document.getElementById('btnJump');
+  const R = 52, SPR = 1.32;                   // knob radius (px); push past SPR×R to sprint
+  let stickId = null, ox = 0, oy = 0;         // active stick touch + its dynamic origin
+  let lookId = null, lx = 0, ly = 0;
+
+  function setStick(dx, dy) {
+    const len = Math.hypot(dx, dy);
+    const cl = Math.min(len, R);
+    const a = len > 0 ? Math.atan2(dy, dx) : 0;
+    const kx = Math.cos(a) * cl, ky = Math.sin(a) * cl;
+    knob.style.transform = `translate(${kx}px, ${ky}px)`;
+    touch.mx = cl > 0 ? (kx / R) : 0;
+    touch.my = cl > 0 ? (ky / R) : 0;
+    touch.move = len > 4;
+    touch.sprint = len > R * SPR;
+    pip.classList.toggle('on', touch.sprint);
+  }
+  function resetStick() {
+    knob.style.transform = 'translate(0,0)';
+    stick.classList.remove('live');
+    touch.move = false; touch.mx = touch.my = 0; touch.sprint = false;
+    pip.classList.remove('on');
+  }
+
+  btnJump.addEventListener('touchstart', e => {
+    e.preventDefault(); e.stopPropagation();
+    wantJump = true; btnJump.classList.add('press');
+  }, { passive: false });
+  btnJump.addEventListener('touchend', e => { e.preventDefault(); btnJump.classList.remove('press'); }, { passive: false });
+
+  addEventListener('touchstart', e => {
+    initAudio();                               // first touch also unblocks audio
+    for (const t of e.changedTouches) {
+      if (stickId === null && t.clientX < innerWidth * 0.45) {
+        stickId = t.identifier; ox = t.clientX; oy = t.clientY;
+        stick.style.left = (ox - 62) + 'px';   // recenter the base under the thumb
+        stick.style.top = (oy - 62) + 'px';
+        stick.style.bottom = 'auto';
+        stick.classList.add('live');
+        setStick(0, 0);
+      } else if (lookId === null) {
+        lookId = t.identifier; lx = t.clientX; ly = t.clientY;
+      }
+    }
+  }, { passive: false });
+
+  addEventListener('touchmove', e => {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+      if (t.identifier === stickId) setStick(t.clientX - ox, t.clientY - oy);
+      else if (t.identifier === lookId) {
+        applyLook(t.clientX - lx, t.clientY - ly);
+        lx = t.clientX; ly = t.clientY;
+      }
+    }
+  }, { passive: false });
+
+  function endTouch(e) {
+    for (const t of e.changedTouches) {
+      if (t.identifier === stickId) { stickId = null; resetStick(); }
+      else if (t.identifier === lookId) lookId = null;
+    }
+  }
+  addEventListener('touchend', endTouch);
+  addEventListener('touchcancel', endTouch);
+
+  // visual-only demo of an engaged stick (for the headless phone screenshot — no real movement)
+  window.__demoStick = () => { stick.classList.add('live'); knob.style.transform = 'translate(30px,-30px)'; };
+}
 
 addEventListener('keydown', e => {
   const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
@@ -350,12 +489,18 @@ function step(dt) {
   camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
   right.crossVectors(fwd, up).normalize();
   let mx = 0, mz = 0;
-  const f = (keys.has('w') ? 1 : 0) - (keys.has('s') ? 1 : 0);
-  const s = (keys.has('d') ? 1 : 0) - (keys.has('a') ? 1 : 0);
+  let f = (keys.has('w') ? 1 : 0) - (keys.has('s') ? 1 : 0);
+  let s = (keys.has('d') ? 1 : 0) - (keys.has('a') ? 1 : 0);
+  let sprint = keys.has('shift'), analog = 1;
+  if (touch.move) {                            // analog stick overrides keys: magnitude → walk speed
+    s = touch.mx; f = -touch.my;               // stick up (screen −y) = forward, right = strafe right
+    analog = Math.min(1, Math.hypot(f, s));
+    sprint = touch.sprint;
+  }
   mx = fwd.x * f + right.x * s; mz = fwd.z * f + right.z * s;
   const ml = Math.hypot(mx, mz); if (ml > 0) { mx /= ml; mz /= ml; }
 
-  const speed = WALK * (keys.has('shift') ? SPRINT : 1);
+  const speed = WALK * (sprint ? SPRINT : 1) * analog;
   const accel = player.onGround ? ACCEL_G : ACCEL_A;       // momentum on the ground, drift in the air
   const k = Math.min(1, accel * dt);
   player.vx += (mx * speed - player.vx) * k;
@@ -418,6 +563,7 @@ window.__groundY = () => groundAt(player.x, player.z) + EYE;
 window.__step = (dt) => step(dt);       // fixed-timestep drive for deterministic physics tests
 window.__pauseSim = false;
 window.__fpsReady = false;
+window.__touchMode = TOUCH;                 // true on coarse-pointer devices (touch HUD shown)
 // audio harness (headless can't hear — these confirm the graph wires up without throwing)
 window.__initAudio = () => { initAudio(); return window.__audioState(); };
 window.__audioState = () => audio ? { state: audio.ctx.state, sampleRate: audio.ctx.sampleRate, masterGain: audio.master.gain.value } : null;

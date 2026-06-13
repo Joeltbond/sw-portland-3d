@@ -49,5 +49,22 @@ const VIEWS = [
     await page.screenshot({ path: OUT + file });
     console.log('shot', file);
   }
+
+  // ---- mobile: phone viewport + touch. This puppeteer build can't emulate the
+  // hover/pointer media features, so force the touch path via the test-only ?forcetouch
+  // flag (the live gate is matchMedia('(hover:hover) and (pointer:fine)') — standard). ----
+  await page.setViewport({ width: 390, height: 844, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
+  await page.goto(PAGE + '?forcetouch=1', { waitUntil: 'load' });
+  await page.waitForFunction(() => window.__fpsReady === true, { timeout: 90000, polling: 500 });
+  const touchMode = await page.evaluate(() => {
+    document.getElementById('play').click();   // TOUCH path: enters game, reveals HUD, starts audio
+    window.__look(-122.7076, 45.4983, 40, -6);
+    if (window.__demoStick) window.__demoStick();
+    return window.__touchMode;
+  });
+  await new Promise(r => setTimeout(r, 1400));
+  await page.screenshot({ path: OUT + 'fps-mobile.png' });
+  console.log('shot fps-mobile.png  touchMode=', touchMode);
+
   await browser.close();
 })().catch(e => { console.error(e.message); process.exit(1); });

@@ -54,6 +54,24 @@ hooks instead: `window.__pauseSim=true; window.__step(1/60)` in a loop, read
   hill. NOT YET DONE — do this before trees/landmarks; record refs used here.
 
 ## Iteration log
+- **#8 (17:34–17:42)** MOBILE CONTROLS — Joel reviews from his phone, so until touch
+  works he can't playtest; top-of-stack. **Capability gate:** `CAN_LOCK =
+  matchMedia('(hover: hover) and (pointer: fine)')`; `TOUCH = !CAN_LOCK` (no UA sniffing).
+  Pointer-lock path runs only on fine-pointer devices; coarse-pointer devices get the touch
+  HUD and a tap-to-enter that skips lock entirely. **Left-thumb analog stick:** dynamic
+  origin — first touch in the left 45% drops the base under the thumb; knob offset → analog
+  `(mx,my)`, magnitude scales walk speed (`speed = WALK * sprint * analog`), and pushing the
+  knob past 1.32×radius flips sprint (shows a "▲ sprint" pip). **Look:** any touch on the
+  right side becomes the look pointer; drag deltas drive a hand-rolled YXZ-euler rotate that
+  mirrors PointerLockControls' maths (clamped pitch) — no lock needed. **Jump button** sets
+  `wantJump`. First touch also calls `initAudio()` (the gesture that unblocks Web Audio).
+  Multi-touch tracked by `identifier` so move + look + jump work simultaneously. Desktop is
+  untouched: `touch.move` stays false → the keys path and `analog=1` are byte-identical to #7.
+  Verified headless: desktop shots show NO HUD; a 390×844 touch shot (forced via test-only
+  `?forcetouch=1`, since this puppeteer can't emulate hover/pointer media features) shows the
+  stick + JUMP rendering correctly, `__touchMode===true`, no console/page errors. **Real-finger
+  feel needs Joel's thumbs to confirm** (drag sensitivity 0.0042, sprint threshold). Test hooks:
+  `__touchMode`, `__demoStick`; shoot-fps.js now also shoots `fps-mobile.png`.
 - **#7 (17:20–17:34)** SOUND — procedural Web Audio, no asset files (page stays
   self-contained). **AudioContext** is built on the click-to-enter (the gesture that
   unblocks audio); ducks to 0.18 on Esc-unlock, restores on re-lock. **Footsteps:** a
@@ -175,8 +193,8 @@ hooks instead: `window.__pauseSim=true; window.__step(1/60)` in a loop, read
    towers as real geometry; a "you are here" anchor that orients the player.
 4. **Boundary feel** — current edge is a silent radial clamp. Add thickening fog + a
    "turn back" cue + gentler push so the level edge reads intentional.
-5. **Touch controls for fps.html** — joystick + look drag + a tap-to-jump, plus a
-   fullscreen button; PointerLock is desktop-only.
+5. ~~**Touch controls for fps.html**~~ — DONE in #8 (analog stick + look drag + jump,
+   capability-gated). Still open: a fullscreen button, and Joel-confirmed feel/sensitivity.
 6. **Pause/help overlay on Esc** (beyond the click-to-enter), minimap-free.
 7. **Promote fps.html → index.html** once trees + landmarks land and it clearly beats
    the MapLibre page; then retire the MapLibre build (keep its NOTES learnings).
