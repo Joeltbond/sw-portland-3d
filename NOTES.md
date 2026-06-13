@@ -59,6 +59,32 @@ harnesses now point there). shoot-fps.js loads `index.html`. New game work happe
   hill. NOT YET DONE — do this before trees/landmarks; record refs used here.
 
 ## Iteration log
+- **#22 (2026-06-12, Joel-directed via FEEDBACK.md)** BACKDROP SEAM FIX + WATER TANK — drained both
+  pending feedback items in one pass.
+  **(1) Backdrop seam.** Joel saw "a weird seam where the two ends of the background backdrop meet."
+  Audited every painted layer of `makeBackdrop()`: the ridgelines are seamless by construction
+  (integer-harmonic sine profiles → `ridge(0)===ridge(W)`), the glow + ridge gradients are
+  full-width verticals, and the Cascade peaks are triple-drawn (`x`, `x−W`, `x+W`) so they wrap.
+  The ONE non-wrapping element was the wispy **cirrus cloud bands**: each ellipse was drawn at a
+  single `crnd()*W` with a 28 px white `shadowBlur` — a cloud straddling the canvas wrap (the south
+  seam, where `bx(180)=0`) got hard-cut on one edge, halo and all, the visible join. Fix: draw each
+  cloud three times (`for off of [-W,0,W]`) so the band + its blur appear on BOTH ends → the panorama
+  tiles cleanly. (Downtown towers sit at NE, nowhere near the south seam — left alone.)
+  **(2) Water tank.** Joel: "large water tower between the compass and the radio tower… visible on the
+  map texture… true position/bearing." **Refs:** OSM Overpass (way 32356677, `man_made=storage_tank,
+  content=water`) + WebSearch (Wikipedia/portland.gov/oregonhikers — "a radio and water tower sit at
+  the center of the park," the tank built on the old 1907 observatory base). Pulled the OSM footprint
+  geometry: a ~10.8 m-diameter circle centered `45.49896,-122.70824` → `WATER={x:-11.6,z:-28.4,r:5.4,
+  h:14}` = 12 m W / 28 m N of the summit, **bearing ~338° NNW, ~31 m out — between the plaza (center)
+  and the radio tower (321°, 113 m)**, landing on its own satellite footprint in the drape. New
+  `buildWaterTower()` builds a welded-steel reservoir: a 14 m drum (grey-green `#8a9088`), two
+  horizontal **plate-seam belts**, a low **conical roof**, a **perimeter railing** at the eave, and a
+  **side ladder** on the +z (south, plaza-facing) face; base embedded 1.2 m so it never floats on the
+  downhill side. `plantGrass` now skips the `r+1.2` footprint; trees were already clear (summit r<75
+  is open). New hook `__hasWater`; harness shoots `fps-water.png` (summit→NNW, tank w/ radio tower
+  beyond). Verified headless: exit 0, `water:true`, summit/fountain/path intact, all views render,
+  no page/console errors. Gotcha: north is `−z` in this world (TOWER z=−89 is "89 m N"), so the tank's
+  +z face is the SOUTH/plaza side — that's where the ladder goes to be seen from spawn.
 - **#21 (2026-06-12)** PAVED LOOP TRAIL + VIEWPOINT BENCHES — the deepest remaining "real place"
   win the open lawn was missing (backlog #3/#9 + Joel's reference-photo list: "paved loop path,
   benches"). Council Crest's grassy crown is circled by a real paved walking loop with benches at
@@ -502,8 +528,10 @@ Boundary (#15) + pause/help (#20) are now done too — remaining work is pure wo
    Possible polish: a matching ground normal map for relief; wind-stirred grass billboards on
    the summit lawn; tint the grain very slightly green/tan to push the grass vs dirt read.
 3. ~~**Summit landmarks**~~ — DONE in #11 (compass-rose viewing plaza + broadcast lattice
-   tower S), #13 (the "Joy" bronze fountain — woman lifting a child — at the spawn plaza), and
-   #21 (paved summit loop trail + connector spur + 4 viewpoint benches at the Cascade sightlines).
+   tower S), #13 (the "Joy" bronze fountain — woman lifting a child — at the spawn plaza),
+   #21 (paved summit loop trail + connector spur + 4 viewpoint benches at the Cascade sightlines),
+   and #22 (the real Council Crest water tank — OSM-georeferenced cylindrical reservoir, NNW
+   between the plaza and the radio tower).
    Possible polish: jetting water on the fountain + a green-oxidation patina, sharper plaza
    paver/brass inlay texture, a low railing at the rim, the bigger Healy Heights tower cluster
    on the backdrop, clear a few trees behind the tower; path curbs/lampposts/worn dirt margins.

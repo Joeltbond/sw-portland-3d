@@ -177,6 +177,11 @@ const PATH_SPUR = 100;                       // bearing (°) of the plaza→loop
 let   PATH_BUILT = false;
 // real 142 m lattice comm tower NW of the summit (OSM: 45.499505, -122.708994 ≈ 71 m W, 89 m N)
 const TOWER = { x: -71, z: -89, h: 95 };     // broadcast lattice tower, bearing ~321° (NW), ~113 m out
+// real Council Crest water tank (OSM way 32356677, man_made=storage_tank/content=water): a ~11 m-
+// diameter cylindrical reservoir at 45.49896,-122.70824 ≈ 12 m W, 28 m N of the summit — bearing
+// ~338° (NNW), ~31 m out: it sits BETWEEN the compass plaza and the radio tower, exactly where
+// Joel sees it on the satellite drape. Drawn at its true position so it lands on its own footprint.
+const WATER = { x: -11.6, z: -28.4, r: 5.4, h: 14 };
 const FOUNTAIN = { bearing: 38, dist: 16 };  // the "Joy" bronze fountain, just off the plaza rim (NE)
 const DEM_Z = 14, SAT_Z = 17;               // z17 imagery (~1m/px) keeps the foreground sharp
 const cosLat0 = Math.cos(LAT0 * Math.PI / 180);
@@ -337,6 +342,8 @@ function makeBackdrop() {
 
   // soft cloud bands drifting across the upper sky (behind the peaks) — wispy cirrus that
   // adds depth without competing with the Cascades. Deterministic PRNG → stable headless shots.
+  // Each band is drawn THREE times (−W / 0 / +W) so a cloud straddling the canvas wrap — and its
+  // 28 px blur halo — appears on BOTH ends instead of being cut at the seam (the panorama tiles).
   let cseed = 1337; const crnd = () => { cseed = (cseed * 16807) % 2147483647; return cseed / 2147483647; };
   g.save();
   g.fillStyle = '#ffffff'; g.shadowColor = 'rgba(255,255,255,0.85)'; g.shadowBlur = 28;
@@ -345,7 +352,9 @@ function makeBackdrop() {
     const cyc = hY - 130 - crnd() * 250;                 // a band of sky above the horizon
     const cw = 140 + crnd() * 280, ch = 10 + crnd() * 16;
     g.globalAlpha = 0.08 + crnd() * 0.16;
-    g.beginPath(); g.ellipse(cxc, cyc, cw / 2, ch / 2, 0, 0, Math.PI * 2); g.fill();
+    for (const off of [-W, 0, W]) {
+      g.beginPath(); g.ellipse(cxc + off, cyc, cw / 2, ch / 2, 0, 0, Math.PI * 2); g.fill();
+    }
   }
   g.restore();
 
@@ -628,6 +637,7 @@ function plantGrass() {
       if (r < PLAZA_R + 1.2 || r > 77) continue;            // off the deck, on the open crown
       if (Math.abs(r - PATH_R) < PATH_W / 2 + 0.4) continue; // keep the loop trail clear of grass
       if (Math.hypot(x - fx, z - fz) < 2.4) continue;        // clear the fountain footprint
+      if (Math.hypot(x - WATER.x, z - WATER.z) < WATER.r + 1.2) continue;  // clear the water-tank footprint
       place.push([x, z, 0.8 + rnd() * 0.75, rnd() * Math.PI * 2]);
     }
   }
@@ -794,9 +804,46 @@ function buildSummit() {
     scene.add(drum);
   }
 
+  buildWaterTower();
   buildPath();
   buildFountain();
 }
+
+// Council Crest's big cylindrical WATER TANK — a real landmark on the rise between the summit
+// plaza and the radio tower (OSM storage_tank, ~11 m across; visible on the satellite drape it
+// stands on). Modeled as a welded-steel reservoir: a tall drum with horizontal plate seams, a low
+// conical roof, a perimeter railing at the eave, and a side access ladder facing the plaza.
+function buildWaterTower() {
+  const gy = groundAt(WATER.x, WATER.z);
+  const g = new THREE.Group();
+  g.position.set(WATER.x, gy, WATER.z);
+  const EMB = 1.2;                                   // embed the base so it never floats on the downhill side
+  const wall = WATER.h - EMB;
+  const steel = new THREE.MeshLambertMaterial({ color: '#8a9088' });        // weathered grey-green steel
+  const drum = new THREE.Mesh(new THREE.CylinderGeometry(WATER.r, WATER.r, WATER.h, 40), steel);
+  drum.position.y = WATER.h / 2 - EMB; g.add(drum);
+  // horizontal plate-seam belts so the steel reads as riveted plating, not a smooth pipe
+  for (const hy of [0.34, 0.67]) {
+    const belt = new THREE.Mesh(new THREE.CylinderGeometry(WATER.r + 0.06, WATER.r + 0.06, 0.22, 40),
+      new THREE.MeshLambertMaterial({ color: '#787e76' }));
+    belt.position.y = wall * hy; g.add(belt);
+  }
+  // low conical roof seated on the drum top
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(WATER.r + 0.25, 2.2, 40),
+    new THREE.MeshLambertMaterial({ color: '#6f756d' }));
+  roof.position.y = wall + 1.1; g.add(roof);
+  // perimeter railing ring at the eave
+  const rail = new THREE.Mesh(new THREE.TorusGeometry(WATER.r + 0.18, 0.07, 6, 40),
+    new THREE.MeshLambertMaterial({ color: '#565b53' }));
+  rail.rotation.x = Math.PI / 2; rail.position.y = wall + 0.12; g.add(rail);
+  // vertical access ladder up the south (+z) face, toward the plaza so it's seen from spawn
+  const lad = new THREE.Mesh(new THREE.BoxGeometry(0.5, wall, 0.12),
+    new THREE.MeshLambertMaterial({ color: '#4d5149' }));
+  lad.position.set(0, wall / 2, WATER.r + 0.07); g.add(lad);
+  scene.add(g);
+  __water = g;
+}
+let __water = null;
 
 // The "Joy" fountain — Council Crest's bronze centerpiece (Frederic Littman, 1956): a woman
 // with her hair swept back, lifting a child in her outstretched raised arms, ~3 m tall on a
@@ -1436,6 +1483,7 @@ window.__treeCount = () => TREES;           // forest sanity check for the headl
 window.__grassCount = () => GRASS;          // summit-lawn grass tuft count
 window.__hasSummit = () => PLAZA_TOP !== null;   // plaza/tower built
 window.__hasFountain = () => !!__fountain;       // "Joy" bronze fountain built
+window.__hasWater = () => !!__water;             // Council Crest water tank built
 window.__hasPath = () => PATH_BUILT;             // paved loop trail + benches built
 // audio harness (headless can't hear — these confirm the graph wires up without throwing)
 window.__initAudio = () => { initAudio(); return window.__audioState(); };

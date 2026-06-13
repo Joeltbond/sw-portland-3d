@@ -13,15 +13,22 @@ normal backlog.
 
 ## Pending
 
-- 2026-06-12 (Joel) — There's a weird seam where the two ends of the background
-  backdrop meet (the painted skyline/horizon ring doesn't wrap seamlessly —
-  visible discontinuity where start meets end). Make the panorama tile/blend
-  cleanly so there's no join.
-- 2026-06-12 (Joel) — There should be a large water tower in between the compass
-  and the radio tower. Look for reference photos online; it should also be
-  visible on the map texture. Add it at its true position/bearing.
-
 ## Handled
+
+- 2026-06-12 — "Weird seam where the two ends of the background backdrop meet." →
+  the painted panorama's ridgelines + glow already tiled (integer-harmonic sine
+  profiles, full-width gradients), but the wispy cirrus CLOUD bands were placed
+  with a single un-wrapped x and a 28 px blur halo, so a cloud straddling the
+  canvas wrap got hard-cut at the south seam (the visible join). Fix: draw each
+  cloud three times (−W / 0 / +W) so it — and its blur — appears on both ends.
+  Panorama now tiles cleanly. (#22)
+- 2026-06-12 — "Large water tower between the compass and the radio tower; it's
+  on the map texture — add it at its true position/bearing." → added the real
+  Council Crest water tank from OSM (way 32356677, man_made=storage_tank, ~11 m
+  cylinder at 45.49896,-122.70824 ≈ 12 m W / 28 m N of the summit, bearing 338°
+  NNW, ~31 m out — exactly between the plaza and the NW radio tower, sitting on
+  its own satellite footprint). Modeled as a welded-steel reservoir: drum +
+  plate-seam belts + low conical roof + eave railing + side ladder. (#22)
 
 - 2026-06-12 — "Compass is running the ground. Also some things are in the wrong
   location — look at the maps and satellite images." → re-centered the world on

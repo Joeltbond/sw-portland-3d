@@ -11,6 +11,7 @@ const VIEWS = [
   ['fps-slope.png', -122.7050, 45.4955, 320, -2],        // partway down, looking back up
   ['fps-plaza.png', -122.70809, 45.49871, 90, -42],        // spawn, look down at the compass-rose deck
   ['fps-tower.png', -122.70809, 45.49871, 321, 6],         // summit → the broadcast tower (NW)
+  ['fps-water.png', -122.70809, 45.49871, 338, 4],         // summit → the water tank (NNW), radio tower beyond
   ['fps-fountain.png', -122.70809, 45.49871, 38, 7],       // spawn → the "Joy" bronze fountain (NE off the rim)
   ['fps-lawn.png', -122.70809, 45.49871, 60, -14],         // spawn, low over the grassy crown → wind-stirred lawn
   ['fps-path.png', -122.707434, 45.498629, 5, -4],         // standing on the loop trail, looking N along the paved path
@@ -53,6 +54,7 @@ const VIEWS = [
   console.log('grass:', await page.evaluate(() => window.__grassCount && window.__grassCount()));
   console.log('summit:', await page.evaluate(() => window.__hasSummit && window.__hasSummit()));
   console.log('fountain:', await page.evaluate(() => window.__hasFountain && window.__hasFountain()));
+  console.log('water:', await page.evaluate(() => window.__hasWater && window.__hasWater()));
   console.log('path:', await page.evaluate(() => window.__hasPath && window.__hasPath()));
 
   // ---- sprint FOV kick: drive forward+sprint via fixed-timestep, FOV should widen from base
