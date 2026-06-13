@@ -73,6 +73,28 @@ const VIEWS = [
   console.log('shot fps-sprint.png');
   await page.evaluate(() => { window.__key('w', false); window.__key('shift', false); window.__pauseSim = false; });
 
+  // ---- boundary feel: sprint straight at the park edge. Player must NOT cross BOUND (860);
+  // edge→~1, fog.far thickens from 1850 toward ~700. Then shoot the vignette + "turn back" cue.
+  const edge = await page.evaluate(() => {
+    window.__look(-122.7076, 45.4983, 90, 0);          // face due east (+x, outward)
+    window.__pauseSim = true;
+    window.__player.x = 600; window.__player.z = 0;
+    window.__player.vx = window.__player.vy = window.__player.vz = 0;
+    window.__key('w', true); window.__key('shift', true);
+    let maxR = 0;
+    for (let i = 0; i < 1200; i++) { window.__step(1 / 60); maxR = Math.max(maxR, window.__edge().r); }
+    const e = window.__edge();
+    return { maxR: +maxR.toFixed(1), ...e };
+  });
+  console.log('edge:', JSON.stringify(edge));
+  await new Promise(r => setTimeout(r, 500));            // let the render loop paint the vignette/cue
+  await page.screenshot({ path: OUT + 'fps-edge.png' });
+  console.log('shot fps-edge.png');
+  await page.evaluate(() => {
+    window.__key('w', false); window.__key('shift', false); window.__pauseSim = false;
+    window.__look(-122.7076, 45.4983, 40, -6);
+  });
+
   for (const [file, lng, lat, heading, pitch] of VIEWS) {
     await page.evaluate((lng, lat, heading, pitch) => window.__look(lng, lat, heading, pitch),
       lng, lat, heading, pitch);

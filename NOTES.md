@@ -54,6 +54,32 @@ hooks instead: `window.__pauseSim=true; window.__step(1/60)` in a loop, read
   hill. NOT YET DONE — do this before trees/landmarks; record refs used here.
 
 ## Iteration log
+- **#15 (19:18–19:32)** BOUNDARY FEEL — the last untouched game-feel item (backlog #4). The
+  level edge was a SILENT hard radial clamp at `BOUND 860` (snap-back + 0.3× velocity) — an
+  invisible wall, the classic immersion tell. Now the park edge reads intentional across a 160 m
+  margin (`EDGE_START 700`→`BOUND 860`): **(1) input-speed falloff** — `edge` (0→1 across the
+  margin) is computed at the TOP of `step()` from the pre-move radius and your walk speed is
+  scaled `*(1 - 0.9·edge)`, so your legs give out as you wade toward the rim — a decisive but soft
+  stop (sprinting straight out you stall ~r=755, never reaching BOUND). **(2) gentle inward
+  drift** — `EDGE_PUSH 7 · edge · dt` along the inward radial, easing you back around. **(3) mist
+  closes in** — `scene.fog.near/far` pull from base (350/1850) toward ~150/670 as you near the
+  edge. **(4) vignette + cue** — a full-screen `#vignette` (radial gradient, `mix-blend-mode:
+  multiply`, opacity = depth) darkens the screen corners and a `#edgeCue` "↩ edge of the park —
+  turn back" chip fades up. **Key trick — visual intensity is DECOUPLED from the physics stop:**
+  because the speed falloff + push stall you around raw edge≈0.35, the fog/vignette/cue are driven
+  off a remapped `edgeView = min(1, edge/0.38)` so they saturate to ~full (vignette ~0.9, fog.far
+  ~790) right at the practical stop — the world reads as fully "closing in" without ever needing
+  you near BOUND. The DOM overlays are written in the RENDER loop (not `step()`) so the test's
+  tight fixed-timestep loops don't thrash the DOM. The radial clamp at BOUND stays as a backstop,
+  now rarely hit. Verified headless: sprinting east from r=600 for 1200 steps, **maxR=754.6 (never
+  crosses BOUND 860)**, edgeView 0.90, fog.far 792; `fps-edge.png` shows the vignette + turn-back
+  cue + mist; `fps-hood.png` and all other views are unchanged (edge=0 fully resets fog/vignette).
+  No page/console errors; trees 11767, summit/fountain true. Gotcha: compute `edge` from the
+  pre-move position at the top of `step()` so the speed falloff applies the SAME frame (using the
+  post-move radius lagged a frame and let momentum punch through); and keep fog driven by the
+  remapped `edgeView`, not raw `edge`, or the mist barely moves before you've already stopped.
+  Test hook `__edge()` → `{edge, r, fogFar}`; harness drives a sprint into the rim, shoots
+  `fps-edge.png`. **The drift/turn-around feel is FELT while moving — Joel's hands confirm it.**
 - **#14 (18:34–18:42)** SPRINT FOV KICK — the last movement-feel item from Joel's "FPS without
   shooting" bar ("sprint (maybe a subtle FOV kick)"). Camera FOV now widens from `BASE_FOV` 75°
   toward 83° (`FOV_KICK 8`) and eases back, **driven by ACTUAL ground speed, not the Shift key**:
@@ -326,8 +352,10 @@ Remaining work is world richness + the boundary/pause polish below.*
    Possible polish: jetting water on the fountain + a green-oxidation patina, sharper plaza
    paver/brass inlay texture, a low railing at the rim, the bigger Healy Heights tower cluster
    on the backdrop, clear a few trees behind the tower.
-4. **Boundary feel** — current edge is a silent radial clamp. Add thickening fog + a
-   "turn back" cue + gentler push so the level edge reads intentional.
+4. ~~**Boundary feel**~~ — DONE in #15 (input-speed falloff + inward drift + thickening fog +
+   vignette + "turn back" cue across a 160 m margin; visual intensity decoupled from the soft
+   stop). Possible polish: a faint directional arrow pointing back to the summit; tie the cue
+   text to the actual nearest in-park landmark; a subtle low audio cue at the rim.
 5. ~~**Touch controls for fps.html**~~ — DONE in #8 (analog stick + look drag + jump,
    capability-gated). Still open: a fullscreen button, and Joel-confirmed feel/sensitivity.
 6. **Pause/help overlay on Esc** (beyond the click-to-enter), minimap-free.

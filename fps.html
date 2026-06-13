@@ -21,6 +21,19 @@
       letter-spacing: .14em; text-transform: uppercase;
       -webkit-backdrop-filter: blur(7px); backdrop-filter: blur(7px);
     }
+    #vignette {
+      position: absolute; inset: 0; pointer-events: none; opacity: 0;
+      background: radial-gradient(ellipse 72% 72% at center, transparent 38%, rgba(20,26,34,.86) 100%);
+      mix-blend-mode: multiply;
+    }
+    #edgeCue {
+      position: absolute; left: 50%; bottom: 22%; transform: translateX(-50%);
+      padding: 7px 18px; border-radius: 14px; background: rgba(15,18,22,.5);
+      border: 1px solid rgba(255,180,120,.42); color: #ffd9b0;
+      font-weight: 600; font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+      white-space: nowrap; opacity: 0; transition: opacity .22s;
+      -webkit-backdrop-filter: blur(7px); backdrop-filter: blur(7px);
+    }
     #loading {
       position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
       background: #141b27; color: #aebccb; font-size: 15px; letter-spacing: .04em;
@@ -75,6 +88,8 @@
 <body>
 <div id="ui">
   <div id="crosshair" style="display:none"></div>
+  <div id="vignette"></div>
+  <div id="edgeCue">↩ edge of the park — turn back</div>
   <div id="spot" style="display:none">◈ Council Crest Summit</div>
   <div id="attr">Terrain: Mapzen/AWS · Imagery © Esri, Maxar, Earthstar</div>
   <div id="touchHud">
@@ -107,7 +122,10 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 // ---- the level: Council Crest, Portland's high point ----
 const LNG0 = -122.7076, LAT0 = 45.4983;   // summit
 const HALF = 950;                           // half-extent of the level (m) — ~1.9 km square
-const BOUND = 860;                          // soft boundary radius (m)
+const BOUND = 860;                          // hard backstop radius (m) — now rarely reached
+const EDGE_START = 700;                      // margin where the boundary feel begins
+const EDGE_PUSH = 7;                         // inward drift (m/s²) at the rim
+const FOG_NEAR0 = 350, FOG_FAR0 = 1850;      // base fog; thickens toward the edge
 const EXAG = 1.25;                          // vertical exaggeration — make the hill read
 const EYE = 1.7;                            // eye height (m)
 const PLAZA_R = 11;                          // summit viewing-plaza radius (m)
@@ -744,6 +762,9 @@ const play = document.getElementById('play');
 const crosshair = document.getElementById('crosshair');
 const spotEl = document.getElementById('spot');
 const touchHud = document.getElementById('touchHud');
+const vignetteEl = document.getElementById('vignette');
+const edgeCueEl = document.getElementById('edgeCue');
+let edgeView = 0;                           // 0..1 boundary depth, driven by step(), shown by the render loop
 
 if (TOUCH) {
   document.querySelector('#play .sub').innerHTML =
@@ -971,7 +992,13 @@ function step(dt) {
   mx = fwd.x * f + right.x * s; mz = fwd.z * f + right.z * s;
   const ml = Math.hypot(mx, mz); if (ml > 0) { mx /= ml; mz /= ml; }
 
-  const speed = WALK * (sprint ? SPRINT : 1) * analog;
+  // boundary depth at the START of the frame (0 inside the park → 1 at the rim). Drives an
+  // input-speed falloff (your legs give out as you wade into the edge) so the stop is decisive
+  // but soft, plus the inward push / fog / cue below.
+  const r0 = Math.hypot(player.x, player.z);
+  const edge = r0 > EDGE_START ? Math.min(1, (r0 - EDGE_START) / (BOUND - EDGE_START)) : 0;
+
+  const speed = WALK * (sprint ? SPRINT : 1) * analog * (1 - 0.9 * edge);
   const accel = player.onGround ? ACCEL_G : ACCEL_A;       // momentum on the ground, drift in the air
   const k = Math.min(1, accel * dt);
   player.vx += (mx * speed - player.vx) * k;
@@ -979,12 +1006,25 @@ function step(dt) {
 
   player.x += player.vx * dt; player.z += player.vz * dt;
 
-  // soft boundary — gently arrest motion past the level edge
+  // soft boundary — instead of a silent wall, the park edge reads intentional: as you wade
+  // into the margin (EDGE_START→BOUND) the world mists in, a vignette closes, a "turn back"
+  // cue fades up, your legs give out (speed falloff above) and a gentle inward drift turns you
+  // around. The radial clamp at BOUND is just a backstop that's now rarely reached.
   const r = Math.hypot(player.x, player.z);
-  if (r > BOUND) {
+  if (r > EDGE_START) {
+    const nx = player.x / r, nz = player.z / r;             // outward radial unit
+    const push = EDGE_PUSH * edge * dt;                     // inward drift, stronger near the rim
+    player.vx -= nx * push; player.vz -= nz * push;
+  }
+  if (r > BOUND) {                                          // hard backstop (now rarely reached)
     const s2 = BOUND / r; player.x *= s2; player.z *= s2;
     player.vx *= 0.3; player.vz *= 0.3;
   }
+  // Visual intensity saturates near the practical stop depth (the speed falloff + push stall
+  // you around edge≈0.35), so the mist/vignette/cue read FULLY while the stop itself stays soft.
+  edgeView = Math.min(1, edge / 0.38);
+  scene.fog.near = FOG_NEAR0 - edgeView * 200;              // world closes in at the edge
+  scene.fog.far = FOG_FAR0 - edgeView * 1180;
 
   // gravity + ground
   if (wantJump && player.onGround) { player.vy = JUMP; player.onGround = false; }
@@ -1024,6 +1064,10 @@ function step(dt) {
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
   if (ready && !window.__pauseSim) step(dt);
+  // boundary atmosphere (driven off step()'s edgeView; written here so the test's tight
+  // fixed-timestep loops don't thrash the DOM)
+  vignetteEl.style.opacity = edgeView.toFixed(3);
+  edgeCueEl.style.opacity = edgeView > 0.25 ? '1' : '0';
   // occasional birdsong, scheduled off the audio clock (2.5–9.5 s apart, sometimes skipped)
   if (audio && audio.ctx.state === 'running' && audio.ctx.currentTime > audio.nextBird) {
     if (Math.random() < 0.7) chirp();
@@ -1039,6 +1083,7 @@ window.__key = (k, down) => { if (down) keys.add(k); else keys.delete(k); };
 window.__jump = () => { wantJump = true; };
 window.__groundY = () => groundAt(player.x, player.z) + EYE;
 window.__fov = () => camera.fov;            // sprint FOV-kick check for the headless harness
+window.__edge = () => ({ edge: +edgeView.toFixed(3), r: +Math.hypot(player.x, player.z).toFixed(1), fogFar: +scene.fog.far.toFixed(0) });
 window.__step = (dt) => step(dt);       // fixed-timestep drive for deterministic physics tests
 window.__pauseSim = false;
 window.__fpsReady = false;
