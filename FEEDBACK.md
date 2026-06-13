@@ -13,6 +13,15 @@ normal backlog.
 
 ## Pending
 
+- 2026-06-12 — Inspiration: "Breath of the Wild" (Joel, from Slack). Pull on
+  BotW's open-air feel as a north star for atmosphere — soft volumetric haze
+  with depth, gently stylized (not photoreal) terrain and foliage, warm
+  readable lighting, distant landmarks that pull you toward them, and an
+  unhurried sense of standing in a big quiet landscape. Treat it as a mood/
+  art-direction reference, not a feature list — apply what genuinely improves
+  the Council Crest walk (don't bolt on game mechanics). Verify any change on a
+  PORTRAIT/mobile render.
+
 - 2026-06-12 — "Pretty sloppy and bad" (Joel, with a phone screenshot of the
   Council Crest view). The "drifting cumulus sky" (commit ab570b3) rendered as
   giant white blobs covered in rainbow speckle/dither noise, smeared right over
