@@ -54,6 +54,24 @@ hooks instead: `window.__pauseSim=true; window.__step(1/60)` in a loop, read
   hill. NOT YET DONE — do this before trees/landmarks; record refs used here.
 
 ## Iteration log
+- **#14 (18:34–18:42)** SPRINT FOV KICK — the last movement-feel item from Joel's "FPS without
+  shooting" bar ("sprint (maybe a subtle FOV kick)"). Camera FOV now widens from `BASE_FOV` 75°
+  toward 83° (`FOV_KICK 8`) and eases back, **driven by ACTUAL ground speed, not the Shift key**:
+  `over = max(0, hsp−WALK)/(WALK·SPRINT−WALK)`, `targetFov = BASE_FOV + FOV_KICK·min(1,over)`,
+  then an exponential lerp `camera.fov += (target−fov)·min(1,FOV_LERP·dt)` (`FOV_LERP 5`) with
+  `updateProjectionMatrix()` only when it actually moves (>1e-3). Because it rides real velocity,
+  the kick ramps IN with momentum as you accelerate past walking pace and ramps OUT as you slow —
+  no instant snap. It's gated on `player.onGround` so a sprint-jump doesn't punch the FOV out
+  mid-air (silent airborne, like the footsteps). Verified headless via the fixed-timestep hook
+  (new `window.__fov()`): from a standing summit start, base **75.00** → after 150 sprint-steps
+  **kicks up** → after 150 coast-steps back to **75.01** (clean recovery). NOTE the harness drives
+  a downhill heading (100°, off the summit), so the player keeps going briefly airborne and the
+  measured kick only reached ~77.7° — that's the on-ground gate working, not a bug; on the flat
+  summit lawn it reaches the full +8°. No page/console errors; trees 11767, summit/fountain true.
+  **The kick is subtle by design — it's FELT while moving, not visible in a still frame; Joel's
+  hands confirm the feel.** Gotcha: read FOV off `camera.fov` + always `updateProjectionMatrix()`
+  after changing it, and gate on `onGround` or downhill/jumping sprints flicker the FOV. Test hook
+  `__fov()`; harness drives a sprint via `__key/__step` and shoots `fps-sprint.png`.
 - **#13 (19:02–19:14)** "JOY" FOUNTAIN — Council Crest's bronze centerpiece, now a real
   landmark at the spawn plaza (backlog #3 polish). **Refs used:** WebSearch → portland.gov +
   the59club blog + Wikipedia "Pioneer Woman (Littman)" + portlandbridges photos — confirmed
@@ -271,6 +289,9 @@ hooks instead: `window.__pauseSim=true; window.__step(1/60)` in a loop, read
   FOV 60° in FP, 36.87° (default) in orbit. Test hooks: `__fpEnter/__fpExit/__fp`.
 
 ## Next ideas (three.js fps.html is now the main track — priority order)
+*Movement-feel checklist from Joel's "FPS without shooting" bar is now COMPLETE: accel/momentum
+(#6), gravity+jump (#6), sprint (#6), sprint FOV kick (#14), head bob (#6), pointer-lock look (#6).
+Remaining work is world richness + the boundary/pause polish below.*
 0. **Reference-photo pass (DO FIRST, before any visual work)** — study real Council
    Crest photos (WebSearch/WebFetch), then make the summit match: grassy clearing, the
    circular brick plaza + fountain, the radio/TV towers, the Douglas-fir ring, paved loop

@@ -50,6 +50,29 @@ const VIEWS = [
   console.log('summit:', await page.evaluate(() => window.__hasSummit && window.__hasSummit()));
   console.log('fountain:', await page.evaluate(() => window.__hasFountain && window.__hasFountain()));
 
+  // ---- sprint FOV kick: drive forward+sprint via fixed-timestep, FOV should widen from base
+  // (~75) toward ~83, then ease back to base when the sprint stops. Then shoot the kicked view.
+  const fov = await page.evaluate(() => {
+    window.__look(-122.7076, 45.4983, 100, 5);     // summit → Hood, on the ground
+    window.__pauseSim = true;
+    const base = window.__fov();
+    window.__key('w', true); window.__key('shift', true);
+    for (let i = 0; i < 150; i++) window.__step(1 / 60);   // accelerate to full sprint
+    const sprint = window.__fov();
+    window.__key('shift', false); window.__key('w', false);
+    for (let i = 0; i < 150; i++) window.__step(1 / 60);   // coast to a stop
+    const rest = window.__fov();
+    // re-kick for the screenshot
+    window.__key('w', true); window.__key('shift', true);
+    for (let i = 0; i < 150; i++) window.__step(1 / 60);
+    return { base: +base.toFixed(2), sprint: +sprint.toFixed(2), rest: +rest.toFixed(2), kicked: +window.__fov().toFixed(2) };
+  });
+  console.log('fov:', JSON.stringify(fov));
+  await new Promise(r => setTimeout(r, 600));
+  await page.screenshot({ path: OUT + 'fps-sprint.png' });
+  console.log('shot fps-sprint.png');
+  await page.evaluate(() => { window.__key('w', false); window.__key('shift', false); window.__pauseSim = false; });
+
   for (const [file, lng, lat, heading, pitch] of VIEWS) {
     await page.evaluate((lng, lat, heading, pitch) => window.__look(lng, lat, heading, pitch),
       lng, lat, heading, pitch);

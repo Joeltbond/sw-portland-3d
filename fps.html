@@ -130,7 +130,8 @@ const scene = new THREE.Scene();
 const HORIZON = new THREE.Color('#ddd0bb');     // warm haze the distance dissolves into
 scene.fog = new THREE.Fog(HORIZON, 350, 1850);
 
-const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 6000);
+const BASE_FOV = 75, FOV_KICK = 8, FOV_LERP = 5;   // sprinting widens FOV → tactile sense of speed
+const camera = new THREE.PerspectiveCamera(BASE_FOV, innerWidth / innerHeight, 0.1, 6000);
 
 // gradient sky dome (deep blue zenith → warm horizon), matches the MapLibre build's mood
 const skyGeo = new THREE.SphereGeometry(4000, 32, 16);
@@ -995,6 +996,13 @@ function step(dt) {
 
   // subtle head bob when walking on the ground
   const hsp = Math.hypot(player.vx, player.vz);
+
+  // sprint FOV kick — driven by ACTUAL ground speed (not the key) so it ramps with momentum
+  // and only kicks above walking pace; silent while airborne so a sprint-jump doesn't punch out.
+  const over = player.onGround ? Math.max(0, hsp - WALK) / (WALK * SPRINT - WALK) : 0;
+  const targetFov = BASE_FOV + FOV_KICK * Math.min(1, over);
+  const nf = camera.fov + (targetFov - camera.fov) * Math.min(1, FOV_LERP * dt);
+  if (Math.abs(nf - camera.fov) > 1e-3) { camera.fov = nf; camera.updateProjectionMatrix(); }
   let bobY = 0;
   if (player.onGround && hsp > 0.3) {
     player.bob += hsp * dt * 1.9;
@@ -1030,6 +1038,7 @@ window.__player = player;
 window.__key = (k, down) => { if (down) keys.add(k); else keys.delete(k); };
 window.__jump = () => { wantJump = true; };
 window.__groundY = () => groundAt(player.x, player.z) + EYE;
+window.__fov = () => camera.fov;            // sprint FOV-kick check for the headless harness
 window.__step = (dt) => step(dt);       // fixed-timestep drive for deterministic physics tests
 window.__pauseSim = false;
 window.__fpsReady = false;
