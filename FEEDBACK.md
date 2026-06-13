@@ -13,6 +13,11 @@ normal backlog.
 
 ## Pending
 
+- 2026-06-12 — "The Douglas firs need to be much bigger." The forest trees read
+  too small/shrub-like; scale up the conifers (and the mixed canopy generally) so
+  mature firs tower the way real Council Crest old-growth does. Bump trunk height
+  + crown size meaningfully, not a token nudge.
+
 ## Handled
 
 - 2026-06-12 — "Weird seam where the two ends of the background backdrop meet." →
