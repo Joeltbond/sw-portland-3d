@@ -120,7 +120,7 @@ import { PointerLockControls } from 'three/addons/controls/PointerLockControls.j
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // ---- the level: Council Crest, Portland's high point ----
-const LNG0 = -122.7076, LAT0 = 45.4983;   // summit
+const LNG0 = -122.70809, LAT0 = 45.49871;   // summit — OSM peak node 357324187 (327 m / 1073 ft)
 const HALF = 950;                           // half-extent of the level (m) — ~1.9 km square
 const BOUND = 860;                          // hard backstop radius (m) — now rarely reached
 const EDGE_START = 700;                      // margin where the boundary feel begins
@@ -130,7 +130,8 @@ const EXAG = 1.25;                          // vertical exaggeration — make th
 const EYE = 1.7;                            // eye height (m)
 const PLAZA_R = 11;                          // summit viewing-plaza radius (m)
 let   PLAZA_TOP = null;                      // plaza deck world-y (set once the DEM is in)
-const TOWER = { x: 18, z: 120, h: 58 };      // broadcast lattice tower, ~120 m SSE of the summit
+// real 142 m lattice comm tower NW of the summit (OSM: 45.499505, -122.708994 ≈ 71 m W, 89 m N)
+const TOWER = { x: -71, z: -89, h: 95 };     // broadcast lattice tower, bearing ~321° (NW), ~113 m out
 const FOUNTAIN = { bearing: 38, dist: 16 };  // the "Joy" bronze fountain, just off the plaza rim (NE)
 const DEM_Z = 14, SAT_Z = 17;               // z17 imagery (~1m/px) keeps the foreground sharp
 const cosLat0 = Math.cos(LAT0 * Math.PI / 180);
@@ -568,9 +569,11 @@ function makeCompassTexture() {
   const g = cv.getContext('2d');
   const pt = (bear, rad) => [C + rad * Math.sin(bear * Math.PI / 180), C - rad * Math.cos(bear * Math.PI / 180)];
 
-  // paved stone deck — warm concrete with a soft radial vignette
+  // paved stone deck — cool grey granite (deliberately NOT the warm tan of the summit dirt,
+  // so at eye level the deck reads as built pavement with a clear edge instead of smearing
+  // into the ground), with a soft radial vignette
   const base = g.createRadialGradient(C, C, 30, C, C, R);
-  base.addColorStop(0, '#c7c0b1'); base.addColorStop(1, '#a59c8c');
+  base.addColorStop(0, '#b7b4ad'); base.addColorStop(1, '#8c897f');
   g.fillStyle = base; g.beginPath(); g.arc(C, C, R, 0, 7); g.fill();
   // concentric paver rings + radial joints (a paved circle, not a flat slab)
   g.strokeStyle = 'rgba(90,82,68,0.45)'; g.lineWidth = 2.5;
@@ -594,12 +597,14 @@ function makeCompassTexture() {
     g.fillStyle = '#3a3327'; g.fillText(t.n, ...pt(b, R * 0.90));   // horizontal label = always legible
   }
 
-  // central compass rose: a 16-point brass star on a bronze medallion
-  const rose = R * 0.34;
-  g.fillStyle = '#6b5836'; g.beginPath(); g.arc(C, C, rose, 0, 7); g.fill();
+  // central compass rose: a 16-point brass star on a bronze medallion. Kept modest (0.24R) and
+  // muted — a big saturated gold star fills the near foreground at standing eye level and reads
+  // as a smear "running" across the ground; a smaller, desaturated medallion stays a tasteful inlay.
+  const rose = R * 0.24;
+  g.fillStyle = '#5e5848'; g.beginPath(); g.arc(C, C, rose, 0, 7); g.fill();
   for (let pass = 0; pass < 2; pass++) {
     const long = pass === 0;
-    g.fillStyle = long ? '#c9a85e' : '#8f7642';
+    g.fillStyle = long ? '#a99668' : '#786b50';
     for (let k = 0; k < 8; k++) {
       const a = (k * 45 + (long ? 0 : 22.5));
       const tip = pt(a, rose * 0.96), l = pt(a - 90, rose * (long ? 0.14 : 0.10)), r2 = pt(a + 90, rose * (long ? 0.14 : 0.10));
@@ -635,13 +640,14 @@ function buildSummit() {
     new THREE.MeshLambertMaterial({ map: makeCompassTexture() }));
   deck.rotateX(-Math.PI / 2); deck.position.set(0, PLAZA_TOP + 0.02, 0);
   scene.add(deck);
-  // low seat wall around the rim
-  const wall = new THREE.Mesh(new THREE.CylinderGeometry(PLAZA_R + 0.3, PLAZA_R + 0.3, 0.5, 64, 1, true),
-    new THREE.MeshLambertMaterial({ color: '#8f8676', side: THREE.DoubleSide }));
-  wall.position.set(0, PLAZA_TOP + 0.2, 0);
+  // low seat wall around the rim — a touch taller (0.6 m) so it visually caps the deck edge,
+  // stopping the compass from reading as if it runs off across the open ground
+  const wall = new THREE.Mesh(new THREE.CylinderGeometry(PLAZA_R + 0.3, PLAZA_R + 0.3, 0.6, 64, 1, true),
+    new THREE.MeshLambertMaterial({ color: '#9c9384', side: THREE.DoubleSide }));
+  wall.position.set(0, PLAZA_TOP + 0.28, 0);
   scene.add(wall);
 
-  // broadcast lattice tower on the rise to the south (a Council Crest skyline signature)
+  // broadcast lattice tower on the rise to the NW (the real 142 m comm tower — a Council Crest skyline signature)
   const tg = groundAt(TOWER.x, TOWER.z);
   const tower = new THREE.Mesh(makeTowerGeo(TOWER.h, 2.4, 0.6, 14),
     new THREE.MeshLambertMaterial({ color: '#9aa1a8' }));

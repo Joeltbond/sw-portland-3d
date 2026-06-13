@@ -59,6 +59,30 @@ harnesses now point there). shoot-fps.js loads `index.html`. New game work happe
   hill. NOT YET DONE — do this before trees/landmarks; record refs used here.
 
 ## Iteration log
+- **#18 (19:40, Joel-directed)** GEOREF + COMPASS FIX — Joel (live, from his phone): "Compass is
+  running the ground. Also some things are in the wrong location. Take a closer look at the maps and
+  satellite images." Two real bugs, both verified against ground truth (OSM Overpass + Esri imagery,
+  the SAME imagery the level drapes):
+  1. **Wrong summit center.** Origin was `45.4983,-122.7076` — **~60 m SE of the actual summit**
+     (OSM peak node 357324187 = `45.49871,-122.70809`, 327 m / 1073 ft; the binocular viewpoint sits
+     ~16 m off it). Moving `LAT0/LNG0` re-georeferences EVERYTHING relative to origin (satellite
+     drape, DEM, the r<75 open-crown clearing, trees masked to imagery, plaza, spawn), so the open
+     grassy summit now lines up with the real one instead of sitting on the slope.
+  2. **Tower on the wrong side.** Hand-placed `{x:18,z:120}` = 120 m **SSE**, but the real 142 m
+     lattice comm tower is **NW** of the summit (OSM man_made=tower at `45.499505,-122.708994` ≈
+     71 m W, 89 m N, bearing ~321°). Now `TOWER={x:-71,z:-89,h:95}` — relocated to its true bearing
+     and raised toward its real height so it reads as the Council Crest skyline signature it is.
+  3. **Compass "running the ground."** At standing eye level the warm-tan deck + big saturated gold
+     star blended into the tan summit dirt and smeared toward the horizon. Fix = make it read as
+     *built pavement*, not paint: deck base recolored warm-tan→**cool grey granite** (`#b7b4ad→#8c897f`)
+     for hard contrast with the ground; central rose **shrunk 0.34R→0.24R and desaturated**
+     (`#c9a85e/#8f7642→#a99668/#786b50`, medallion `#6b5836→#5e5848`) so it stops filling the near
+     foreground; seat wall raised `0.5→0.6 m` to cap the deck edge. Eye-level repro
+     (`test/shoot-one.js`) confirms the smear is gone — it now reads as a granite viewing plaza you
+     stand on. Verified headless: exit 0, trees 11884, grass 5055, summit/fountain true, all 11 views
+     render; `fps-tower.png` shows the tower NW, `fps-plaza.png`/repro show the granite deck. Test
+     view coords + tower heading (172°SSE→321°NW) updated in shoot-fps.js to match the new origin.
+     **Refs:** OSM Overpass (peak/viewpoint/tower nodes), Esri World Imagery z17 tiles.
 - **#17 (19:17–19:28)** SUMMIT-LAWN GRASS — the deepest remaining "real place" win (backlog #9):
   Council Crest's signature is its OPEN GRASSY crown (the forest #10 deliberately leaves r<75
   clear), but at eye level that clearing read as flat satellite green + #12 grain — the most-seen

@@ -4,15 +4,15 @@ const PAGE = process.env.PAGE || 'file://' + __dirname + '/../index.html';
 const OUT = process.env.OUT || __dirname + '/';
 // [file, lng, lat, heading, pitch]
 const VIEWS = [
-  ['fps-hood.png', -122.7076, 45.4983, 100, 5],          // summit → Mt Hood (E), the hero backdrop shot
-  ['fps-helens.png', -122.7076, 45.4983, 27, 4],         // summit → Mt St Helens / Rainier (NNE)
-  ['fps-summit-ne.png', -122.7076, 45.4983, 40, -6],     // summit, out over the city
-  ['fps-summit-down.png', -122.7076, 45.4983, 150, -20], // summit, down the wooded slope
+  ['fps-hood.png', -122.70809, 45.49871, 100, 5],          // summit → Mt Hood (E), the hero backdrop shot
+  ['fps-helens.png', -122.70809, 45.49871, 27, 4],         // summit → Mt St Helens / Rainier (NNE)
+  ['fps-summit-ne.png', -122.70809, 45.49871, 40, -6],     // summit, out over the city
+  ['fps-summit-down.png', -122.70809, 45.49871, 150, -20], // summit, down the wooded slope
   ['fps-slope.png', -122.7050, 45.4955, 320, -2],        // partway down, looking back up
-  ['fps-plaza.png', -122.7076, 45.4983, 90, -42],        // spawn, look down at the compass-rose deck
-  ['fps-tower.png', -122.7076, 45.4983, 172, 6],         // summit → the broadcast tower (SSE)
-  ['fps-fountain.png', -122.7076, 45.4983, 38, 7],       // spawn → the "Joy" bronze fountain (NE off the rim)
-  ['fps-lawn.png', -122.7076, 45.4983, 60, -14],         // spawn, low over the grassy crown → wind-stirred lawn
+  ['fps-plaza.png', -122.70809, 45.49871, 90, -42],        // spawn, look down at the compass-rose deck
+  ['fps-tower.png', -122.70809, 45.49871, 321, 6],         // summit → the broadcast tower (NW)
+  ['fps-fountain.png', -122.70809, 45.49871, 38, 7],       // spawn → the "Joy" bronze fountain (NE off the rim)
+  ['fps-lawn.png', -122.70809, 45.49871, 60, -14],         // spawn, low over the grassy crown → wind-stirred lawn
 ];
 
 (async () => {
@@ -55,7 +55,7 @@ const VIEWS = [
   // ---- sprint FOV kick: drive forward+sprint via fixed-timestep, FOV should widen from base
   // (~75) toward ~83, then ease back to base when the sprint stops. Then shoot the kicked view.
   const fov = await page.evaluate(() => {
-    window.__look(-122.7076, 45.4983, 100, 5);     // summit → Hood, on the ground
+    window.__look(-122.70809, 45.49871, 100, 5);     // summit → Hood, on the ground
     window.__pauseSim = true;
     const base = window.__fov();
     window.__key('w', true); window.__key('shift', true);
@@ -78,7 +78,7 @@ const VIEWS = [
   // ---- boundary feel: sprint straight at the park edge. Player must NOT cross BOUND (860);
   // edge→~1, fog.far thickens from 1850 toward ~700. Then shoot the vignette + "turn back" cue.
   const edge = await page.evaluate(() => {
-    window.__look(-122.7076, 45.4983, 90, 0);          // face due east (+x, outward)
+    window.__look(-122.70809, 45.49871, 90, 0);          // face due east (+x, outward)
     window.__pauseSim = true;
     window.__player.x = 600; window.__player.z = 0;
     window.__player.vx = window.__player.vy = window.__player.vz = 0;
@@ -94,7 +94,7 @@ const VIEWS = [
   console.log('shot fps-edge.png');
   await page.evaluate(() => {
     window.__key('w', false); window.__key('shift', false); window.__pauseSim = false;
-    window.__look(-122.7076, 45.4983, 40, -6);
+    window.__look(-122.70809, 45.49871, 40, -6);
   });
 
   for (const [file, lng, lat, heading, pitch] of VIEWS) {
@@ -113,7 +113,7 @@ const VIEWS = [
   await page.waitForFunction(() => window.__fpsReady === true, { timeout: 90000, polling: 500 });
   const touchMode = await page.evaluate(() => {
     document.getElementById('play').click();   // TOUCH path: enters game, reveals HUD, starts audio
-    window.__look(-122.7076, 45.4983, 40, -6);
+    window.__look(-122.70809, 45.49871, 40, -6);
     if (window.__demoStick) window.__demoStick();
     return window.__touchMode;
   });
