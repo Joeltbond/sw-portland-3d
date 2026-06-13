@@ -172,6 +172,9 @@ const EXAG = 1.25;                          // vertical exaggeration — make th
 const EYE = 1.7;                            // eye height (m)
 const PLAZA_R = 11;                          // summit viewing-plaza radius (m)
 let   PLAZA_TOP = null;                      // plaza deck world-y (set once the DEM is in)
+const PATH_R = 52, PATH_W = 2.6;            // paved summit loop trail: radius + width (m)
+const PATH_SPUR = 100;                       // bearing (°) of the plaza→loop connector spur (toward Hood, E)
+let   PATH_BUILT = false;
 // real 142 m lattice comm tower NW of the summit (OSM: 45.499505, -122.708994 ≈ 71 m W, 89 m N)
 const TOWER = { x: -71, z: -89, h: 95 };     // broadcast lattice tower, bearing ~321° (NW), ~113 m out
 const FOUNTAIN = { bearing: 38, dist: 16 };  // the "Joy" bronze fountain, just off the plaza rim (NE)
@@ -623,6 +626,7 @@ function plantGrass() {
       const x = ex + (rnd() - 0.5) * 2 * JIT, z = nz + (rnd() - 0.5) * 2 * JIT;
       const r = Math.hypot(x, z);
       if (r < PLAZA_R + 1.2 || r > 77) continue;            // off the deck, on the open crown
+      if (Math.abs(r - PATH_R) < PATH_W / 2 + 0.4) continue; // keep the loop trail clear of grass
       if (Math.hypot(x - fx, z - fz) < 2.4) continue;        // clear the fountain footprint
       place.push([x, z, 0.8 + rnd() * 0.75, rnd() * Math.PI * 2]);
     }
@@ -790,6 +794,7 @@ function buildSummit() {
     scene.add(drum);
   }
 
+  buildPath();
   buildFountain();
 }
 
@@ -848,6 +853,109 @@ function buildFountain() {
   __fountain = g;
 }
 let __fountain = null;
+
+// ---- paved summit loop trail + benches ----
+// Council Crest's summit lawn is circled by a paved walking loop with viewpoint benches
+// (refs: Portland.gov park page, oregonhikers field guide — the open crown is ringed by a
+// paved loop path with benches at the Cascade sightlines). Adds the human-scale "real park"
+// read the open grass was missing, and gives the eye a line to follow around the summit.
+
+// tileable asphalt: grey base + fine aggregate speckle + a faint center seam streak
+function makePathTexture() {
+  const S = 128, cv = document.createElement('canvas');
+  cv.width = cv.height = S;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#6d6b65'; ctx.fillRect(0, 0, S, S);
+  let seed = 1337; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  for (let i = 0; i < 2600; i++) {                       // aggregate speckle
+    const v = 60 + Math.floor(rnd() * 70);
+    ctx.fillStyle = `rgba(${v},${v},${v - 4},${0.25 + rnd() * 0.35})`;
+    ctx.fillRect(rnd() * S, rnd() * S, 1 + rnd() * 1.4, 1 + rnd() * 1.4);
+  }
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.needsUpdate = true;
+  return t;
+}
+
+// a terrain-conforming paving strip from a list of [x,z] centreline points + a width.
+// Two rim vertices per centreline node (left/right of the local tangent), each lifted just
+// above the sampled ground so it drapes over the hill without z-fighting or floating.
+function pavingStrip(pts, width, tex, uScale, closed) {
+  const n = pts.length, hw = width / 2;
+  const verts = [], uvs = [], idx = [];
+  let run = 0;
+  for (let i = 0; i < n; i++) {
+    const [x, z] = pts[i];
+    const a = pts[(i - 1 + n) % n], b = pts[(i + 1) % n];
+    // tangent: for the open ends of a spur, fall back to the one available neighbour
+    let tx = b[0] - a[0], tz = b[1] - a[1];
+    if (!closed && i === 0) { tx = b[0] - x; tz = b[1] - z; }
+    if (!closed && i === n - 1) { tx = x - a[0]; tz = z - a[1]; }
+    const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
+    const nx = -tz, nz = tx;                              // left normal
+    if (i > 0) run += Math.hypot(x - pts[i - 1][0], z - pts[i - 1][1]);
+    const lx = x + nx * hw, lz = z + nz * hw, rx = x - nx * hw, rz = z - nz * hw;
+    verts.push(lx, groundAt(lx, lz) + 0.06, lz);
+    verts.push(rx, groundAt(rx, rz) + 0.06, rz);
+    const u = run * uScale;
+    uvs.push(u, 0, u, 1);
+  }
+  const segs = closed ? n : n - 1;
+  for (let i = 0; i < segs; i++) {
+    const a = (2 * i) % (2 * n), b = (2 * ((i + 1) % n));
+    idx.push(a, a + 1, b, a + 1, b + 1, b);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  g.setIndex(idx); g.computeVertexNormals();
+  return new THREE.Mesh(g, new THREE.MeshLambertMaterial({ map: tex, side: THREE.DoubleSide }));
+}
+
+// a wooden park bench (one merged mesh), built facing +z; placed by the caller facing outward
+function makeBenchGeo() {
+  const P = [];
+  const box = (w, h, d, x, y, z) => { const b = new THREE.BoxGeometry(w, h, d); b.translate(x, y, z); P.push(b); };
+  box(1.7, 0.09, 0.5, 0, 0.46, 0.10);                    // seat slab
+  box(1.7, 0.5, 0.08, 0, 0.74, -0.16);                   // backrest
+  for (const sx of [-0.72, 0.72]) {
+    box(0.1, 0.46, 0.5, sx, 0.23, 0.10);                 // front/back leg pair (slab side)
+    box(0.1, 0.95, 0.08, sx, 0.5, -0.16);                // backrest upright
+  }
+  return mergeGeometries(P);
+}
+
+function buildPath() {
+  const tex = makePathTexture();
+  // loop trail: a closed ring sampled around the crown, conformed to the terrain
+  const SEG = 168, loop = [];
+  for (let i = 0; i < SEG; i++) {
+    const a = i / SEG * Math.PI * 2;
+    loop.push([Math.sin(a) * PATH_R, -Math.cos(a) * PATH_R]);
+  }
+  const loopMesh = pavingStrip(loop, PATH_W, tex, 0.5, true);
+  scene.add(loopMesh);
+  // connector spur from the plaza rim out to the loop, toward the eastern (Hood) viewpoint
+  const sb = PATH_SPUR * Math.PI / 180, sdx = Math.sin(sb), sdz = -Math.cos(sb);
+  const spur = [];
+  for (let r = PLAZA_R - 0.5; r <= PATH_R + 0.5; r += 2) spur.push([sdx * r, sdz * r]);
+  scene.add(pavingStrip(spur, PATH_W - 0.4, tex, 0.5, false));
+
+  // viewpoint benches on the outer edge of the loop, facing the hero sightlines
+  const benchGeo = makeBenchGeo();
+  const benchMat = new THREE.MeshLambertMaterial({ color: '#6b5238' });
+  for (const bearing of [100, 22, 205, 295]) {           // Hood E, downtown/St Helens NNE, Tualatin SW, tower NW
+    const br = bearing * Math.PI / 180;
+    const bx = Math.sin(br) * (PATH_R + 1.5), bz = -Math.cos(br) * (PATH_R + 1.5);
+    const bench = new THREE.Mesh(benchGeo, benchMat);
+    bench.position.set(bx, groundAt(bx, bz), bz);
+    bench.rotation.y = Math.atan2(bx, bz);               // turn the seat front outward toward the view
+    scene.add(bench);
+  }
+  PATH_BUILT = true;
+}
 
 // Seamless, tileable ground-detail grain (luminance only). Periodic value-noise (sine
 // octaves wrap exactly over the tile) plus faint vertical blade streaks → reads as grass/
@@ -1328,6 +1436,7 @@ window.__treeCount = () => TREES;           // forest sanity check for the headl
 window.__grassCount = () => GRASS;          // summit-lawn grass tuft count
 window.__hasSummit = () => PLAZA_TOP !== null;   // plaza/tower built
 window.__hasFountain = () => !!__fountain;       // "Joy" bronze fountain built
+window.__hasPath = () => PATH_BUILT;             // paved loop trail + benches built
 // audio harness (headless can't hear — these confirm the graph wires up without throwing)
 window.__initAudio = () => { initAudio(); return window.__audioState(); };
 window.__audioState = () => audio ? { state: audio.ctx.state, sampleRate: audio.ctx.sampleRate, masterGain: audio.master.gain.value } : null;

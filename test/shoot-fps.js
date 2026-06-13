@@ -13,6 +13,8 @@ const VIEWS = [
   ['fps-tower.png', -122.70809, 45.49871, 321, 6],         // summit → the broadcast tower (NW)
   ['fps-fountain.png', -122.70809, 45.49871, 38, 7],       // spawn → the "Joy" bronze fountain (NE off the rim)
   ['fps-lawn.png', -122.70809, 45.49871, 60, -14],         // spawn, low over the grassy crown → wind-stirred lawn
+  ['fps-path.png', -122.707434, 45.498629, 5, -4],         // standing on the loop trail, looking N along the paved path
+  ['fps-bench.png', -122.707358, 45.498619, 280, -3],      // just off the eastern loop, a viewpoint bench in frame
 ];
 
 (async () => {
@@ -51,6 +53,7 @@ const VIEWS = [
   console.log('grass:', await page.evaluate(() => window.__grassCount && window.__grassCount()));
   console.log('summit:', await page.evaluate(() => window.__hasSummit && window.__hasSummit()));
   console.log('fountain:', await page.evaluate(() => window.__hasFountain && window.__hasFountain()));
+  console.log('path:', await page.evaluate(() => window.__hasPath && window.__hasPath()));
 
   // ---- sprint FOV kick: drive forward+sprint via fixed-timestep, FOV should widen from base
   // (~75) toward ~83, then ease back to base when the sprint stops. Then shoot the kicked view.

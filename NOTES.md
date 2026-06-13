@@ -59,6 +59,31 @@ harnesses now point there). shoot-fps.js loads `index.html`. New game work happe
   hill. NOT YET DONE — do this before trees/landmarks; record refs used here.
 
 ## Iteration log
+- **#21 (2026-06-12)** PAVED LOOP TRAIL + VIEWPOINT BENCHES — the deepest remaining "real place"
+  win the open lawn was missing (backlog #3/#9 + Joel's reference-photo list: "paved loop path,
+  benches"). Council Crest's grassy crown is circled by a real paved walking loop with benches at
+  the Cascade sightlines; until now the clearing was just grass + plaza. Added `buildPath()`:
+  **(1) a terrain-conforming loop trail** at `PATH_R 52 m`, `PATH_W 2.6 m` — `pavingStrip(pts,
+  width, tex, uScale, closed)` builds a triangle-strip ribbon from a centreline, two rim verts per
+  node offset ±hw along the local tangent-normal, each **lifted +0.06 m above the sampled `groundAt`
+  so it drapes over the hill** without z-fighting or floating; 168 segments around the crown.
+  **(2) a connector spur** from the plaza rim out to the loop toward the eastern (Hood) viewpoint
+  (`PATH_SPUR 100°`). **(3) four wooden benches** (`makeBenchGeo` — seat/back/legs boxes merged into
+  one mesh, warm-wood Lambert) on the loop's outer edge at bearings 100/22/205/295 (Hood E, downtown
+  NNE, Tualatin SW, tower NW), each `rotation.y = atan2(bx,bz)` so the **seat front faces outward
+  toward the view**. Asphalt is a 128² tileable canvas (grey base + seeded aggregate speckle,
+  RepeatWrapping). `plantGrass` now skips the loop footprint (`|r − PATH_R| < W/2+0.4`), so grass
+  drops 5055→4683. **KEY GOTCHA: the strip rendered INVISIBLE at first** — the triangle winding faced
+  down, so the default `FrontSide` material backface-culled the walkable top; fix = `side:
+  THREE.DoubleSide` (same as the grass billboards). Verified headless: exit 0, `path:true`, trees
+  11884, grass 4683, summit/fountain true, FOV kick + edge falloff + pause all intact, all 13 views
+  render, no page/console errors. `fps-path.png` shows the grey paved trail curving across the green
+  crown toward the Cascades (reads exactly like the real loop); `fps-bench.png` shows a wooden bench
+  on the trail with the broadcast tower behind. New test hook `__hasPath`; harness shoots `fps-path`
+  (standing on the loop, looking N along the path) + `fps-bench` (just off the loop, a bench framed).
+  Note: the committed views had to use on-loop lng/lat — a summit-down angle is dominated by the
+  plaza terrace and hides the r=52 ring. Possible polish: edge curbs/borders, a few lampposts or
+  trash cans, worn dirt margins where the path meets grass, a second connector spur.
 - **#20 (2026-06-12)** PAUSE / HELP OVERLAY — the last game-feel touch on the checklist (backlog
   #6). Until now Esc / pointer-unlock just dumped you back to the bare **enter** screen ("Council
   Crest · click to enter") — indistinguishable from a cold boot, the classic "did it reset?" tell.
@@ -477,10 +502,11 @@ Boundary (#15) + pause/help (#20) are now done too — remaining work is pure wo
    Possible polish: a matching ground normal map for relief; wind-stirred grass billboards on
    the summit lawn; tint the grain very slightly green/tan to push the grass vs dirt read.
 3. ~~**Summit landmarks**~~ — DONE in #11 (compass-rose viewing plaza + broadcast lattice
-   tower S) and #13 (the "Joy" bronze fountain — woman lifting a child — at the spawn plaza).
+   tower S), #13 (the "Joy" bronze fountain — woman lifting a child — at the spawn plaza), and
+   #21 (paved summit loop trail + connector spur + 4 viewpoint benches at the Cascade sightlines).
    Possible polish: jetting water on the fountain + a green-oxidation patina, sharper plaza
    paver/brass inlay texture, a low railing at the rim, the bigger Healy Heights tower cluster
-   on the backdrop, clear a few trees behind the tower.
+   on the backdrop, clear a few trees behind the tower; path curbs/lampposts/worn dirt margins.
 4. ~~**Boundary feel**~~ — DONE in #15 (input-speed falloff + inward drift + thickening fog +
    vignette + "turn back" cue across a 160 m margin; visual intensity decoupled from the soft
    stop). Possible polish: a faint directional arrow pointing back to the summit; tie the cue
