@@ -13,7 +13,16 @@ normal backlog.
 
 ## Pending
 
-_(empty)_
+- 2026-06-12 — "Pretty sloppy and bad" (Joel, with a phone screenshot of the
+  Council Crest view). The "drifting cumulus sky" (commit ab570b3) rendered as
+  giant white blobs covered in rainbow speckle/dither noise, smeared right over
+  Mt Hood and the Cascades — it read as broken texture noise, not clouds.
+  **Already reverted** (commit 155527f) — the bare blue sky is back. DO NOT
+  re-add clouds with the same approach. Only attempt a sky again if you can make
+  it look genuinely good: small, crisp, sparse puffs high in the dome, no
+  speckle/noise artifacts, never occluding the peaks — and verify it on a
+  PORTRAIT/mobile-aspect render (Joel views from his phone), not just landscape.
+  If you can't clear that bar, leave the clean blue sky alone.
 
 ## Handled
 
