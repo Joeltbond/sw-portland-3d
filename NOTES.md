@@ -54,6 +54,24 @@ hooks instead: `window.__pauseSim=true; window.__step(1/60)` in a loop, read
   hill. NOT YET DONE — do this before trees/landmarks; record refs used here.
 
 ## Iteration log
+- **#9 (17:46–17:56)** RICHER BACKGROUND — illustrated distant backdrop (Joel 17:28: "make
+  the background richer… we'll need an illustration"). Painted a 360° panorama onto a canvas
+  and wrapped it on a **BackSide cylinder** (R=3500, h=3000, fog-exempt) sitting beyond the
+  terrain mesh but inside the sky dome. **Bearing alignment is DERIVED, not guessed:**
+  three.js CylinderGeometry puts the u=0 column at world +z and wraps u→θ CCW, so the column
+  seen looking toward compass bearing B is `u=(180−B)/360` → paint content for B at
+  `x=((180−B)/360)·W`, no mesh rotation, no mirror (BackSide keeps the same UVs). Verified:
+  looking heading 100 centers **Mt Hood** (the hero — tallest, asymmetric, deepest snow, a
+  shaded right flank for form); heading 27 shows **St Helens** as a flat truncated dome.
+  Peaks use REAL summit coords (`bearingTo(lat,lng)` from the summit) at h≈2.5× the real ~2°
+  angle so the Cascades read. Also: faint downtown-tower cluster NE in the valley, and 4
+  **layered ridgelines** (far blue-grey → near forested) with integer-harmonic sine profiles
+  (seamless across the due-south wrap) whose bases fade to the warm horizon haze (#d8ccb7) so
+  the illustration melts into the fogged terrain edge — mesh + backdrop read as one world.
+  Vertical: canvas horizon row (v=0.55) lands at world y≈330 (eye level) via mesh.position.y=480.
+  Default spawn view now shows St Helens+Adams on the horizon where before it was empty haze.
+  Verified headless (fps-hood/fps-helens/fps-summit-ne), no page/console errors. Test now
+  shoots `fps-hood.png` + `fps-helens.png`. **Snow/peak feel is Joel's call on the live page.**
 - **#8 (17:34–17:42)** MOBILE CONTROLS — Joel reviews from his phone, so until touch
   works he can't playtest; top-of-stack. **Capability gate:** `CAN_LOCK =
   matchMedia('(hover: hover) and (pointer: fine)')`; `TOUCH = !CAN_LOCK` (no UA sniffing).
@@ -180,6 +198,13 @@ hooks instead: `window.__pauseSim=true; window.__step(1/60)` in a loop, read
    circular brick plaza + fountain, the radio/TV towers, the Douglas-fir ring, paved loop
    path, benches, Mt Hood/St Helens sightlines. Record which refs were used so later
    iterations don't re-research. Trees (#1) and landmarks (#3) both depend on this.
+   *Refs used so far (#9, sightlines):* Portland.gov Council Crest page + oregonhikers
+   field guide + Wikipedia — confirmed the five-Cascade-peak view (Hood E, St Helens &
+   Rainier NNE, Adams NE, Jefferson SE), the summit compass rose, downtown/Tualatin valley.
+   Still NOT done: ON-SUMMIT photo refs (plaza/fountain/towers/firs) for trees + landmarks.
+0b. ~~**Richer illustrated backdrop**~~ — DONE in #9 (painted panorama cylinder: real-bearing
+   Cascade peaks + layered ridgelines, Hood is the hero). Possible polish: clouds/alpenglow,
+   parallax, sharper peak rock/snow texture, time-of-day tint matching the sun.
 1. **Trees / forest** — the single biggest "real place" win. The satellite drape shows
    canopy from above but eye-level reads as smooth green ground. Instance Douglas-fir
    billboards/low-poly cones from OSM `landuse=forest`/`natural=wood` polygons (or just

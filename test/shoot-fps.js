@@ -4,7 +4,9 @@ const PAGE = process.env.PAGE || 'file://' + __dirname + '/../fps.html';
 const OUT = process.env.OUT || __dirname + '/';
 // [file, lng, lat, heading, pitch]
 const VIEWS = [
-  ['fps-summit-ne.png', -122.7076, 45.4983, 40, -6],    // summit, out over the city
+  ['fps-hood.png', -122.7076, 45.4983, 100, 5],          // summit → Mt Hood (E), the hero backdrop shot
+  ['fps-helens.png', -122.7076, 45.4983, 27, 4],         // summit → Mt St Helens / Rainier (NNE)
+  ['fps-summit-ne.png', -122.7076, 45.4983, 40, -6],     // summit, out over the city
   ['fps-summit-down.png', -122.7076, 45.4983, 150, -20], // summit, down the wooded slope
   ['fps-slope.png', -122.7050, 45.4955, 320, -2],        // partway down, looking back up
 ];

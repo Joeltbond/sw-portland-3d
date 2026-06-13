@@ -138,6 +138,141 @@ const skyMat = new THREE.ShaderMaterial({
 });
 scene.add(new THREE.Mesh(skyGeo, skyMat));
 
+// ---- illustrated distant backdrop: a painted 360° panorama ring beyond the terrain ----
+// three.js can't mesh terrain out to the Cascades, so the far world is an ILLUSTRATION on a
+// canvas-textured cylinder: layered ridgelines with atmospheric-perspective fade + the real
+// Cascade peaks at their TRUE compass bearings from the summit. It's fog-exempt (fog would
+// erase anything past 1850 m) and its base is painted to the same warm horizon haze the
+// fogged terrain edge dissolves into, so mesh and illustration read as one continuous world.
+// It's fixed to the WORLD (a child of the scene, not the camera), so it rotates correctly.
+//
+// Bearing→texture alignment is DERIVED, not guessed. three.js CylinderGeometry places the
+// u=0 texture column at world +z and wraps u→theta CCW, so the column seen looking toward
+// compass bearing B is u=(180−B)/360. Painting content for bearing B at x=((180−B)/360)·W
+// therefore needs no mesh rotation and no mirror flip (BackSide keeps the same UVs).
+const bearingTo = (lat, lng) => {
+  const east = (lng - LNG0) * 111320 * cosLat0, north = (lat - LAT0) * 111320;
+  return ((Math.atan2(east, north) * 180 / Math.PI) % 360 + 360) % 360;   // 0=N, 90=E
+};
+const PEAKS = [
+  // h = px above the horizon line (artistic ~2.5× the real ~2° angle so the Cascades read);
+  // Hood is the hero — tallest, asymmetric, deepest snow. Real summit coords + a haze tint.
+  { name: 'Mt Hood',      lat: 45.3735, lng: -121.6959, h: 178, w: 270, snow: 0.64, hero: true, tint: '#dbe4ee' },
+  { name: 'Mt Adams',     lat: 46.2024, lng: -121.4906, h: 86,  w: 240, snow: 0.50, faint: 0.78, tint: '#c4cdd9' },
+  { name: 'Mt St Helens', lat: 46.1914, lng: -122.1956, h: 96,  w: 250, snow: 0.52, dome: true,  tint: '#ced7e2' },
+  { name: 'Mt Rainier',   lat: 46.8523, lng: -121.7603, h: 112, w: 240, snow: 0.60, faint: 0.55, bOff: -5, tint: '#c8d2de' },
+  { name: 'Mt Jefferson', lat: 44.6743, lng: -121.7996, h: 82,  w: 150, snow: 0.50, faint: 0.72, tint: '#c4ced9' },
+];
+function drawPeak(g, cx, hY, p, W) {
+  if (cx < -p.w || cx > W + p.w) return;
+  const top = hY - p.h, hw = p.w / 2;
+  g.save();
+  g.globalAlpha = p.faint || 1;
+  g.beginPath();
+  g.moveTo(cx - hw, hY);
+  if (p.dome) {                          // St Helens — broad, flat-topped truncated dome
+    g.lineTo(cx - hw * 0.5, top + p.h * 0.16);
+    g.quadraticCurveTo(cx, top - 3, cx + hw * 0.5, top + p.h * 0.16);
+    g.lineTo(cx + hw, hY);
+  } else if (p.hero) {                    // Hood — summit left of center, steep N face, long S shoulder
+    g.lineTo(cx - hw * 0.18, top + p.h * 0.04);
+    g.lineTo(cx - hw * 0.05, top);
+    g.lineTo(cx + hw, hY);
+  } else {
+    g.lineTo(cx - hw * 0.05, top);
+    g.lineTo(cx + hw, hY);
+  }
+  g.closePath();
+  const body = g.createLinearGradient(0, top, 0, hY);
+  body.addColorStop(0, p.tint);
+  body.addColorStop(1, '#cfc6b6');       // flanks dissolve into the horizon haze
+  g.fillStyle = body; g.fill();
+  // a faint shaded right flank gives the cone form instead of a flat cutout
+  g.save(); g.clip();
+  g.beginPath();
+  g.moveTo(cx + hw * 0.02, top); g.lineTo(cx + hw, hY); g.lineTo(cx + hw * 0.02, hY);
+  g.closePath();
+  g.fillStyle = 'rgba(70,92,120,0.16)'; g.fill();
+  g.restore();
+  // snowcap: clip to the silhouette, fill from the summit down to a jagged snowline
+  g.save(); g.clip();
+  const snowY = top + p.h * p.snow;
+  g.beginPath(); g.moveTo(cx - hw, snowY);
+  let sd = 1.7;
+  for (let x = cx - hw, k = 0; x <= cx + hw; x += hw / 4, k++) {
+    sd = -sd; g.lineTo(x, snowY + sd * p.h * 0.05 - p.h * (k & 1 ? 0.02 : 0));
+  }
+  g.lineTo(cx + hw, snowY); g.lineTo(cx + hw, top - 4); g.lineTo(cx - hw, top - 4);
+  g.closePath();
+  const snow = g.createLinearGradient(0, top, 0, snowY);
+  snow.addColorStop(0, 'rgba(245,249,252,0.97)');
+  snow.addColorStop(1, 'rgba(214,224,234,0.55)');
+  g.fillStyle = snow; g.fill();
+  g.restore();
+  g.restore();
+}
+function makeBackdrop() {
+  const W = 4096, H = 1024, hY = Math.round(H * 0.55);
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d');
+  const bx = B => ((((180 - B) % 360) + 360) % 360) / 360 * W;   // bearing → canvas x (derived)
+
+  // soft atmospheric glow hugging the horizon
+  const glow = g.createLinearGradient(0, hY - 170, 0, hY + 30);
+  glow.addColorStop(0, 'rgba(223,212,192,0)');
+  glow.addColorStop(0.72, 'rgba(228,217,197,0.40)');
+  glow.addColorStop(1, 'rgba(223,212,192,0.78)');
+  g.fillStyle = glow; g.fillRect(0, hY - 170, W, 200);
+
+  // downtown towers in the valley to the NE — a faint hazy cluster sitting low on the horizon
+  const dtx = bx(bearingTo(45.5187, -122.6790));
+  g.save(); g.globalAlpha = 0.5;
+  for (let i = 0; i < 9; i++) {
+    const tw = 5 + (i % 3) * 3, th = 10 + ((i * 37) % 26), tx = dtx - 34 + i * 8;
+    g.fillStyle = '#b9c1cd'; g.fillRect(tx, hY - th, tw, th);
+  }
+  g.restore();
+
+  // distant Cascade peaks (drawn BEFORE the ridge layers so the foothills occlude their bases)
+  for (const p of PEAKS) {
+    const x = bx(bearingTo(p.lat, p.lng) + (p.bOff || 0));
+    drawPeak(g, x, hY, p, W); drawPeak(g, x - W, hY, p, W); drawPeak(g, x + W, hY, p, W);
+  }
+
+  // layered ridgelines, far→near: faint blue-grey high near the horizon → darker forested
+  // foothills with a taller, rougher silhouette. Frequencies are integer harmonics of the
+  // 4096 px width so the profile is seamless across the due-south wrap.
+  const TWO_PI_W = 2 * Math.PI / W;
+  const ridge = (x, harms) => harms.reduce((y, [a, n, ph]) => y + a * Math.sin(x * n * TWO_PI_W + ph), 0);
+  const layers = [
+    { base: hY - 22, col: '#aab6c4', hs: [[15, 3, 0.0], [7, 9, 2.1], [3, 23, 4.7]] },
+    { base: hY - 6,  col: '#94a59b', hs: [[22, 4, 1.3], [10, 11, 3.4], [4, 27, 0.7]] },
+    { base: hY + 14, col: '#6c8870', hs: [[32, 5, 2.6], [14, 13, 1.1], [6, 31, 5.2]] },
+    { base: hY + 42, col: '#4c6952', hs: [[46, 6, 0.4], [19, 12, 4.2], [8, 29, 2.3]] },
+  ];
+  for (const L of layers) {
+    g.beginPath(); g.moveTo(0, H);
+    for (let x = 0; x <= W; x += 3) g.lineTo(x, L.base - Math.abs(ridge(x, L.hs)) * 0.5 - ridge(x, L.hs) * 0.5);
+    g.lineTo(W, H); g.closePath();
+    const grd = g.createLinearGradient(0, L.base - 80, 0, H);
+    grd.addColorStop(0, L.col);
+    grd.addColorStop(1, '#d8ccb7');       // base melts into the warm horizon haze
+    g.fillStyle = grd; g.fill();
+  }
+
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  const geo = new THREE.CylinderGeometry(3500, 3500, 3000, 160, 1, true);
+  const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, transparent: true, depthWrite: false, fog: false });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.y = 480;                   // horizon row (canvas v=0.55) lands at world y≈330 (eye level)
+  mesh.renderOrder = -1;
+  return mesh;
+}
+scene.add(makeBackdrop());
+
 // Lighting for a satellite-draped hill: the imagery already carries baked sun and
 // shadow, so keep a bright flat fill (ambient + hemisphere) and add only a gentle
 // directional for form — otherwise slopes facing away from the sun crush to black.
