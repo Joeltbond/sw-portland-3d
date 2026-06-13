@@ -59,6 +59,31 @@ harnesses now point there). shoot-fps.js loads `index.html`. New game work happe
   hill. NOT YET DONE — do this before trees/landmarks; record refs used here.
 
 ## Iteration log
+- **#17 (19:17–19:28)** SUMMIT-LAWN GRASS — the deepest remaining "real place" win (backlog #9):
+  Council Crest's signature is its OPEN GRASSY crown (the forest #10 deliberately leaves r<75
+  clear), but at eye level that clearing read as flat satellite green + #12 grain — the most-seen
+  area (you SPAWN here) had no life. Now **5055 instanced grass tufts** carpet the open lawn.
+  Each tuft = **3 crossed alpha-cut billboards** (`PlaneGeometry(0.52,0.46)` translated so the base
+  sits at y=0, merged at 0/60/120°) textured from a 64² canvas of ~7 tapered HSL-green blades
+  (`alphaTest 0.42`, DoubleSide). **Wind sway is in the vertex shader, zero per-frame CPU:**
+  `onBeforeCompile` injects a `uTime` uniform and displaces `transformed.x/z` by
+  `sin/cos(uTime·1.7 + phase)·position.y·{0.16,0.09}` — weighted by **local blade height** (base
+  planted, tips roll) and **phased per-instance** via `instanceMatrix[3].xyz` (each tuft's world
+  pos) so the whole field rolls as one breeze; the render loop ticks `grassWind.value =
+  clock.elapsedTime`. Planted with a deterministic PRNG on a jittered 1.5 m grid over the crown,
+  **r ∈ [PLAZA_R+1.2, 77]** (off the compass deck, on the open lawn), skipping the fountain
+  footprint (<2.4 m); per-tuft scale 0.8–1.55, random yaw, ground-clamped via `groundAt`, and a
+  per-instance HSL tint (summery green, lightness ~0.56) so it isn't one flat shade. Verified
+  headless: `grass:5055`, no page/console errors, everything else intact (trees 11767,
+  summit/fountain true, FOV kick base75→77.7, edge maxR 754.6). `fps-lawn.png` + `fps-summit-ne.png`
+  show the crown now reads as a mottled green grassy carpet in the foreground vs the old flat wash;
+  Hood hero / plaza / fountain / tower all unchanged. Gotcha 1: brighten BOTH the blade-texture
+  lightness AND the per-instance tint — texture-color × instanceColor double-darkens, the first
+  pass (tint L=0.42, texture L=28–46%) came out as dark shadow-patches, not summer lawn. Gotcha 2:
+  CanvasTexture default `flipY` maps canvas-top→quad-top, so draw blade TIPS at canvas y≈0.
+  Test hook `__grassCount`; shoot-fps.js shoots `fps-lawn.png` (spawn, low over the crown). **Sway
+  motion is FELT live — a still frame can't show the breeze; Joel's eyes confirm the movement.**
+  Possible polish: a ground normal map under it; thin/lengthen near the rim; seasonal tan dry-grass.
 - **#16 (19:05–19:14)** PROMOTE TO index.html — the gated milestone (backlog #7). Every
   precondition was met: forest (#10), summit landmarks + fountain (#11/#13), illustrated
   backdrop (#9), near-ground detail (#12), boundary feel (#15), sound (#7), mobile (#8),
@@ -389,5 +414,7 @@ Remaining work is world richness + the boundary/pause polish below.*
 8. **Perf**: the DEM/imagery refetch on every load; consider caching or a lower first-paint
    then upgrade. Build is ~17 s under swiftshader, faster on real bandwidth.
 9. **Foliage / world polish** (the deepest remaining "real place" wins): vary tree species
-   (broadleaf/cedar shapes), soft wind sway, soften the near-black shaded cone sides;
-   wind-stirred grass billboards on the summit lawn; jetting fountain water + patina.
+   (broadleaf/cedar shapes), soft TREE wind sway, soften the near-black shaded cone sides;
+   jetting fountain water + patina. ~~Wind-stirred grass on the summit lawn~~ DONE in #17
+   (5055 instanced sway-shader tufts on the open crown). Grass polish: a ground normal map
+   under it, longer/thinner blades at the rim, seasonal dry-grass tan.

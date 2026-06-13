@@ -12,6 +12,7 @@ const VIEWS = [
   ['fps-plaza.png', -122.7076, 45.4983, 90, -42],        // spawn, look down at the compass-rose deck
   ['fps-tower.png', -122.7076, 45.4983, 172, 6],         // summit → the broadcast tower (SSE)
   ['fps-fountain.png', -122.7076, 45.4983, 38, 7],       // spawn → the "Joy" bronze fountain (NE off the rim)
+  ['fps-lawn.png', -122.7076, 45.4983, 60, -14],         // spawn, low over the grassy crown → wind-stirred lawn
 ];
 
 (async () => {
@@ -47,6 +48,7 @@ const VIEWS = [
   });
   console.log('audio:', JSON.stringify(audio));
   console.log('trees:', await page.evaluate(() => window.__treeCount && window.__treeCount()));
+  console.log('grass:', await page.evaluate(() => window.__grassCount && window.__grassCount()));
   console.log('summit:', await page.evaluate(() => window.__hasSummit && window.__hasSummit()));
   console.log('fountain:', await page.evaluate(() => window.__hasFountain && window.__hasFountain()));
 

@@ -438,6 +438,92 @@ function plantForest() {
   scene.add(foliage, trunks);
 }
 
+// ---- summit lawn: wind-stirred grass tufts on the open grassy crown ----
+// Council Crest's signature is an OPEN GRASSY summit (the forest #10 leaves r<75 clear).
+// At eye level that crown reads as flat satellite green + grain; instanced blade tufts give
+// it real, moving foreground. Each tuft = 3 crossed alpha-cut billboards; a vertex-shader
+// sway (weighted by blade height, phased by instance world-pos) rolls the whole lawn in the
+// breeze without per-frame CPU work. Planted only on the clearing, off the plaza + fountain.
+let GRASS = 0;
+let grassWind = null;   // the wind uTime uniform, ticked by the render loop
+function makeGrassTexture() {
+  const S = 64, cv = document.createElement('canvas'); cv.width = cv.height = S;
+  const g = cv.getContext('2d'); g.clearRect(0, 0, S, S);
+  let seed = 4451; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  const blades = 7;
+  for (let i = 0; i < blades; i++) {
+    const x = (i + 0.5) / blades * S + (rnd() - 0.5) * 5;
+    const w = 3 + rnd() * 2.4, topX = x + (rnd() - 0.5) * 13, topY = 5 + rnd() * 13;
+    g.fillStyle = `hsl(${88 + rnd() * 30} 52% ${38 + rnd() * 20}%)`;   // canvas top = blade tip; summery green
+    g.beginPath();
+    g.moveTo(x - w / 2, S);
+    g.quadraticCurveTo(topX + w * 0.3, (S + topY) / 2, topX, topY);
+    g.quadraticCurveTo(topX - w * 0.3, (S + topY) / 2, x + w / 2, S);
+    g.closePath(); g.fill();
+  }
+  const t = new THREE.CanvasTexture(cv);   // flipY default → canvas-top (tips) maps to quad-top
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+function plantGrass() {
+  // one tuft = 3 crossed upright quads, base at y=0 so it plants on the ground
+  const quad = () => { const q = new THREE.PlaneGeometry(0.52, 0.46); q.translate(0, 0.23, 0); return q; };
+  const a = quad(), b = quad(), c = quad();
+  b.rotateY(Math.PI / 3); c.rotateY(2 * Math.PI / 3);
+  const tuftGeo = mergeGeometries([a, b, c]);
+  const mat = new THREE.MeshLambertMaterial({
+    map: makeGrassTexture(), alphaTest: 0.42, side: THREE.DoubleSide,
+  });
+  // wind sway: displace blade tops (local y weights it) by a slow wave phased per instance,
+  // so the lawn rolls as one field. instanceMatrix[3].xyz = each tuft's world position.
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = { value: 0 }; grassWind = sh.uniforms.uTime;
+    sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace(
+      '#include <begin_vertex>',
+      `#include <begin_vertex>
+       #ifdef USE_INSTANCING
+         vec3 iPos = instanceMatrix[3].xyz;
+       #else
+         vec3 iPos = vec3(0.0);
+       #endif
+       float h = max(position.y, 0.0);
+       float ph = iPos.x * 0.33 + iPos.z * 0.33;
+       transformed.x += sin(uTime * 1.7 + ph) * h * 0.16;
+       transformed.z += cos(uTime * 1.3 + ph * 1.4) * h * 0.09;`);
+  };
+
+  let seed = 70207; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  const fx = Math.sin(FOUNTAIN.bearing * Math.PI / 180) * FOUNTAIN.dist;
+  const fz = -Math.cos(FOUNTAIN.bearing * Math.PI / 180) * FOUNTAIN.dist;
+  const place = [];
+  const STEP = 1.5, JIT = 0.7;
+  for (let ex = -80; ex <= 80; ex += STEP) {
+    for (let nz = -80; nz <= 80; nz += STEP) {
+      if (rnd() > 0.62) continue;
+      const x = ex + (rnd() - 0.5) * 2 * JIT, z = nz + (rnd() - 0.5) * 2 * JIT;
+      const r = Math.hypot(x, z);
+      if (r < PLAZA_R + 1.2 || r > 77) continue;            // off the deck, on the open crown
+      if (Math.hypot(x - fx, z - fz) < 2.4) continue;        // clear the fountain footprint
+      place.push([x, z, 0.8 + rnd() * 0.75, rnd() * Math.PI * 2]);
+    }
+  }
+  GRASS = place.length;
+  if (!GRASS) return;
+  const mesh = new THREE.InstancedMesh(tuftGeo, mat, GRASS);
+  const dummy = new THREE.Object3D(), tint = new THREE.Color();
+  for (let i = 0; i < GRASS; i++) {
+    const [x, z, s, yaw] = place[i];
+    dummy.position.set(x, groundAt(x, z) - 0.02, z);
+    dummy.rotation.set(0, yaw, 0); dummy.scale.set(s, s, s);
+    dummy.updateMatrix(); mesh.setMatrixAt(i, dummy.matrix);
+    tint.setHSL(0.25 + (rnd() - 0.5) * 0.05, 0.45, 0.56 + (rnd() - 0.5) * 0.14);
+    mesh.setColorAt(i, tint);
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  scene.add(mesh);
+}
+
 // ---- summit landmarks: the compass-rose viewing plaza + a broadcast lattice tower ----
 // Council Crest's real summit is a circular paved viewing plaza with a big compass rose
 // at the city's high point (1073 ft), ringed by a low seat wall, with broadcast towers on
@@ -724,6 +810,9 @@ async function build() {
 
   // the real summit: a circular compass-rose viewing plaza + the broadcast tower to the south
   buildSummit();
+
+  // wind-stirred grass on the open grassy crown (after the plaza exists so it's planted off it)
+  plantGrass();
 
   // spawn on the summit
   teleport(LNG0, LAT0, 40, -6);
@@ -1064,6 +1153,7 @@ function step(dt) {
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
   if (ready && !window.__pauseSim) step(dt);
+  if (grassWind) grassWind.value = clock.elapsedTime;   // roll the summit grass in the breeze
   // boundary atmosphere (driven off step()'s edgeView; written here so the test's tight
   // fixed-timestep loops don't thrash the DOM)
   vignetteEl.style.opacity = edgeView.toFixed(3);
@@ -1089,6 +1179,7 @@ window.__pauseSim = false;
 window.__fpsReady = false;
 window.__touchMode = TOUCH;                 // true on coarse-pointer devices (touch HUD shown)
 window.__treeCount = () => TREES;           // forest sanity check for the headless harness
+window.__grassCount = () => GRASS;          // summit-lawn grass tuft count
 window.__hasSummit = () => PLAZA_TOP !== null;   // plaza/tower built
 window.__hasFountain = () => !!__fountain;       // "Joy" bronze fountain built
 // audio harness (headless can't hear — these confirm the graph wires up without throwing)
