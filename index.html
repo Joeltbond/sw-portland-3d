@@ -115,6 +115,25 @@
     });
     map.setTerrain({ source: 'terrain', exaggeration: 1.35 });
 
+    // Drape real aerial imagery over the hill — the single biggest "map → game"
+    // move. Esri World Imagery (keyless) at high zoom gives actual canopy,
+    // clearings and the summit lawn instead of the flat cartographic beige wash.
+    // Note Esri tiles are {z}/{y}/{x} order, not {z}/{x}/{y}.
+    map.addSource('satellite', {
+      type: 'raster',
+      tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+      tileSize: 256,
+      maxzoom: 19,
+      attribution: 'Imagery © Esri, Maxar, Earthstar Geographics'
+    });
+
+    // Kill the map paradigm: hide EVERY symbol layer (road/POI/place label text
+    // and icons). This is the other big anti-map move — and it silences the
+    // MapLibre `_mult` icon-bucket spam at the street-level FP camera for free.
+    for (const l of map.getStyle().layers) {
+      if (l.type === 'symbol') map.setLayoutProperty(l.id, 'visibility', 'none');
+    }
+
     // Atmosphere: late-afternoon SW Portland. Deep blue zenith falling to a warm,
     // hazy horizon; distance fog so the far forested ridges recede instead of
     // standing out crisp like a map. (MapLibre v5 sky is a gradient atmosphere —
@@ -142,6 +161,18 @@
     // Extrude buildings from the OpenMapTiles 'building' layer.
     const layers = map.getStyle().layers;
     const firstSymbol = layers.find(l => l.type === 'symbol')?.id;
+
+    // Satellite drape sits ABOVE all the cartographic fills/lines (covering the
+    // green/beige map ground and the bright road casings) but BELOW the buildings,
+    // which still extrude on top of the real imagery. Insert satellite first, then
+    // buildings just below the (hidden) symbols — buildings land above satellite.
+    map.addLayer({
+      id: 'satellite',
+      type: 'raster',
+      source: 'satellite',
+      paint: { 'raster-opacity': 1, 'raster-fade-duration': 300 }
+    }, firstSymbol);
+
     map.addLayer({
       id: '3d-buildings',
       source: 'openmaptiles',
