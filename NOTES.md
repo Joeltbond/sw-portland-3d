@@ -54,6 +54,30 @@ hooks instead: `window.__pauseSim=true; window.__step(1/60)` in a loop, read
   hill. NOT YET DONE — do this before trees/landmarks; record refs used here.
 
 ## Iteration log
+- **#11 (18:22–18:40)** SUMMIT LANDMARKS — the real Council Crest summit, the spawn anchor
+  (backlog #3). **Refs used:** Portland.gov + placespages blog + oregonhikers + Wikipedia +
+  RadioDiscussions/Yelp(Stonehenge Tower) — confirmed the circular paved viewing plaza with
+  a big **compass rose** at the city's high point (1073 ft), a low seat wall, peak-ID plaques
+  (Hood/Adams/St Helens/Rainier), the Littmann bronze fountain statue, and the broadcast
+  towers on the next rise S (the big Healy Heights/Stonehenge lattice tower at 4700 SW Council
+  Crest Dr + a modest city radio tower in the park itself). Built: (1) a **compass-rose plaza**
+  you spawn on — a `CircleGeometry` deck textured from a 1024² canvas (paver rings + radial
+  joints + a 16-point brass star on a bronze medallion + N/E/S/W + "COUNCIL CREST / ELEV
+  1073 FT"), its **rays pointing to the actual Cascades at their TRUE bearings** (`bearingTo`),
+  so the deck lines up with the painted peaks on the #9 backdrop ring; a low cylinder terrace
+  body skirts the terrain falling away beneath, and a `groundAt` override makes the deck the
+  walkable surface inside the rim (a real flat terrace, not a floating plane) + a seat-wall
+  ring. (2) A **broadcast lattice tower** ~120 m SSE: `makeTowerGeo` merges a square tapered
+  4-leg lattice (legs + belts + X-bracing per segment) via a `strut(a,b,r)` cylinder helper,
+  topped with an antenna spire + a fog-exempt red beacon + two microwave drums; a tree-free
+  pad clears its base. **Orientation is DERIVED + verified two ways:** CircleGeometry after
+  `rotateX(-π/2)` maps local +x→east, +y→north, and with the default `flipY` that puts canvas
+  N at the top → looking heading 172 (S) the **S** letter faces the camera ✓, looking heading
+  100 (E) Mt Hood centers ✓. Verified headless (fps-plaza: the rose deck; fps-tower: the
+  lattice tower + beacon over the treeline with Hood ESE on the horizon; Hood hero unchanged),
+  `__hasSummit` true, 11767 trees, no page/console errors. Gotcha: stand the player ON the
+  deck by maxing `groundAt` with `PLAZA_TOP` inside the rim, else you walk through it as the
+  terrain falls. Test hook `__hasSummit`; harness shoots fps-plaza.png + fps-tower.png.
 - **#10 (18:05–18:18)** FOREST — the biggest "real place" win (backlog #1). Council Crest
   is an open grassy summit lawn ringed by Douglas-fir + western red cedar (refs: Portland.gov
   + oregonhikers + audiala — confirmed the ringed-clearing form, 1073 ft); the satellite drape
@@ -220,8 +244,10 @@ hooks instead: `window.__pauseSim=true; window.__step(1/60)` in a loop, read
    Rainier NNE, Adams NE, Jefferson SE), the summit compass rose, downtown/Tualatin valley.
    *(#10, forest):* Portland.gov + oregonhikers + audiala — confirmed the open grassy summit
    lawn RINGED by Douglas-fir + western red cedar, 1073 ft (drove the tree mask + clearing).
-   Still NOT done: ON-SUMMIT photo refs (circular brick plaza/fountain/broadcast towers) for
-   the landmark geometry in #3.
+   *(#11, on-summit landmarks):* Portland.gov + placespages + Wikipedia + RadioDiscussions/Yelp
+   — confirmed the circular compass-rose plaza, seat wall, peak-ID plaques, Littmann bronze
+   fountain, and the Healy Heights/Stonehenge broadcast tower S + a city radio tower in-park.
+   Still open: the bronze fountain statue as real geometry; sharper plaza paver/inlay texture.
 0b. ~~**Richer illustrated backdrop**~~ — DONE in #9 (painted panorama cylinder: real-bearing
    Cascade peaks + layered ridgelines, Hood is the hero). Possible polish: clouds/alpenglow,
    parallax, sharper peak rock/snow texture, time-of-day tint matching the sun.
@@ -234,8 +260,10 @@ hooks instead: `window.__pauseSim=true; window.__step(1/60)` in a loop, read
    soft (grazing-angle minification). Options: a tiling detail/noise texture blended in
    near the camera, a ground normal map, or a subtle near vignette so the eye reads it
    as distance not blur. Trees (#1) will mostly hide this.
-3. **Summit landmarks** — the Council Crest stone compass/overlook + the twin broadcast
-   towers as real geometry; a "you are here" anchor that orients the player.
+3. ~~**Summit landmarks**~~ — DONE in #11 (compass-rose viewing plaza you spawn on, rays at
+   true peak bearings + a broadcast lattice tower S). Possible polish: the Littmann bronze
+   fountain statue as geometry, sharper paver/brass inlay texture, a low railing at the rim,
+   the bigger Healy Heights tower cluster on the backdrop, clear a few trees behind the tower.
 4. **Boundary feel** — current edge is a silent radial clamp. Add thickening fog + a
    "turn back" cue + gentler push so the level edge reads intentional.
 5. ~~**Touch controls for fps.html**~~ — DONE in #8 (analog stick + look drag + jump,

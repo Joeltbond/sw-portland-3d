@@ -110,6 +110,9 @@ const HALF = 950;                           // half-extent of the level (m) — 
 const BOUND = 860;                          // soft boundary radius (m)
 const EXAG = 1.25;                          // vertical exaggeration — make the hill read
 const EYE = 1.7;                            // eye height (m)
+const PLAZA_R = 11;                          // summit viewing-plaza radius (m)
+let   PLAZA_TOP = null;                      // plaza deck world-y (set once the DEM is in)
+const TOWER = { x: 18, z: 120, h: 58 };      // broadcast lattice tower, ~120 m SSE of the summit
 const DEM_Z = 14, SAT_Z = 17;               // z17 imagery (~1m/px) keeps the foreground sharp
 const cosLat0 = Math.cos(LAT0 * Math.PI / 180);
 const dLng = HALF / (111320 * cosLat0);
@@ -339,8 +342,13 @@ const eastOf = lng => (lng - LNG0) * 111320 * cosLat0;
 const northOf = lat => (lat - LAT0) * 111320;
 const lngOf = east => LNG0 + east / (111320 * cosLat0);
 const latOf = north => LAT0 + north / 111320;
-// ground elevation at a world (x=east, z=-north) point
-const groundAt = (x, z) => demSample(lngOf(x), latOf(-z)) * EXAG;
+// ground elevation at a world (x=east, z=-north) point. The summit plaza is a built
+// terrace, so inside its rim the walkable ground is the flat deck, not the raw DEM.
+function groundAt(x, z) {
+  let y = demSample(lngOf(x), latOf(-z)) * EXAG;
+  if (PLAZA_TOP !== null && x * x + z * z < (PLAZA_R - 0.4) * (PLAZA_R - 0.4)) y = Math.max(y, PLAZA_TOP);
+  return y;
+}
 
 // ---- forest: instanced Douglas-firs scattered on the canopy the imagery shows ----
 // Where to plant is read from the satellite drape itself: sample the stitched imagery
@@ -372,6 +380,7 @@ function plantForest() {
       const x = ex + (rnd() - 0.5) * 2 * JIT, z = nz + (rnd() - 0.5) * 2 * JIT;
       const r = Math.hypot(x, z);
       if (r < 75 || r > BOUND - 8) continue;                 // open summit; inside the boundary
+      if (Math.hypot(x - TOWER.x, z - TOWER.z) < 8) continue; // clear a pad at the tower base
       const lng = lngOf(x), lat = latOf(-z);
       if (!isForest(lng, lat)) continue;
       placements.push([x, z, 0.72 + rnd() * 0.8, rnd() * Math.PI * 2]);  // x, z, scale, yaw
@@ -409,6 +418,148 @@ function plantForest() {
   scene.add(foliage, trunks);
 }
 
+// ---- summit landmarks: the compass-rose viewing plaza + a broadcast lattice tower ----
+// Council Crest's real summit is a circular paved viewing plaza with a big compass rose
+// at the city's high point (1073 ft), ringed by a low seat wall, with broadcast towers on
+// the next rise to the south (refs: Portland.gov, placespages, oregonhikers — NOTES #11).
+// The compass rays point to the actual Cascade peaks at their TRUE bearings, so the plaza
+// you stand on lines up with the painted peaks on the backdrop ring.
+
+// a steel strut: a thin cylinder spanning two 3-D points (for the lattice tower)
+const _yUp = new THREE.Vector3(0, 1, 0), _dir = new THREE.Vector3(), _q = new THREE.Quaternion();
+function strut(ax, ay, az, bx, by, bz, r) {
+  const dx = bx - ax, dy = by - ay, dz = bz - az, len = Math.hypot(dx, dy, dz);
+  const g = new THREE.CylinderGeometry(r, r, len, 5);
+  g.translate(0, len / 2, 0);
+  _q.setFromUnitVectors(_yUp, _dir.set(dx, dy, dz).normalize());
+  g.applyQuaternion(_q);
+  g.translate(ax, ay, az);
+  return g;
+}
+// a square tapered lattice tower: 4 legs + horizontal belts + X-bracing per segment
+function makeTowerGeo(H, base, top, segs) {
+  const parts = [];
+  const half = t => base + (top - base) * t;
+  const corner = (i, t) => { const hw = half(t); return [(i & 1 ? 1 : -1) * hw, t * H, (i & 2 ? 1 : -1) * hw]; };
+  const faces = [[0, 1], [1, 3], [3, 2], [2, 0]];
+  for (let s = 0; s < segs; s++) {
+    const t0 = s / segs, t1 = (s + 1) / segs;
+    for (let i = 0; i < 4; i++) { const a = corner(i, t0), b = corner(i, t1); parts.push(strut(...a, ...b, 0.16)); } // legs
+    for (const [i, j] of faces) {                          // belt + X-brace per face
+      const ai = corner(i, t1), bj = corner(j, t1);
+      parts.push(strut(...ai, ...bj, 0.07));               // top belt edge
+      parts.push(strut(...corner(i, t0), ...corner(j, t1), 0.06));
+      parts.push(strut(...corner(j, t0), ...corner(i, t1), 0.06));
+    }
+  }
+  return mergeGeometries(parts);
+}
+
+// paint the compass-rose plaza deck onto a canvas (N at top, rays at true bearings)
+function makeCompassTexture() {
+  const S = 1024, C = S / 2, R = 500;
+  const cv = document.createElement('canvas'); cv.width = cv.height = S;
+  const g = cv.getContext('2d');
+  const pt = (bear, rad) => [C + rad * Math.sin(bear * Math.PI / 180), C - rad * Math.cos(bear * Math.PI / 180)];
+
+  // paved stone deck — warm concrete with a soft radial vignette
+  const base = g.createRadialGradient(C, C, 30, C, C, R);
+  base.addColorStop(0, '#c7c0b1'); base.addColorStop(1, '#a59c8c');
+  g.fillStyle = base; g.beginPath(); g.arc(C, C, R, 0, 7); g.fill();
+  // concentric paver rings + radial joints (a paved circle, not a flat slab)
+  g.strokeStyle = 'rgba(90,82,68,0.45)'; g.lineWidth = 2.5;
+  for (let k = 1; k <= 7; k++) { g.beginPath(); g.arc(C, C, R * k / 7, 0, 7); g.stroke(); }
+  for (let a = 0; a < 360; a += 10) { const [x, y] = pt(a, R); g.beginPath(); g.moveTo(...pt(a, R * 0.33)); g.lineTo(x, y); g.stroke(); }
+
+  // peak rays to the real Cascades at true bearings, with name plates
+  const targets = [
+    { n: 'MT HOOD', lat: 45.3735, lng: -121.6959 },
+    { n: 'MT ST HELENS', lat: 46.1914, lng: -122.1956 },
+    { n: 'MT ADAMS', lat: 46.2024, lng: -121.4906 },
+    { n: 'MT RAINIER', lat: 46.8523, lng: -121.7603 },
+    { n: 'MT JEFFERSON', lat: 44.6743, lng: -121.7996 },
+    { n: 'DOWNTOWN', lat: 45.5187, lng: -122.6790 },
+  ];
+  g.font = '700 24px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  for (const t of targets) {
+    const b = bearingTo(t.lat, t.lng);
+    g.strokeStyle = 'rgba(60,52,40,0.6)'; g.lineWidth = 3;
+    g.beginPath(); g.moveTo(...pt(b, R * 0.40)); g.lineTo(...pt(b, R * 0.80)); g.stroke();
+    g.fillStyle = '#3a3327'; g.fillText(t.n, ...pt(b, R * 0.90));   // horizontal label = always legible
+  }
+
+  // central compass rose: a 16-point brass star on a bronze medallion
+  const rose = R * 0.34;
+  g.fillStyle = '#6b5836'; g.beginPath(); g.arc(C, C, rose, 0, 7); g.fill();
+  for (let pass = 0; pass < 2; pass++) {
+    const long = pass === 0;
+    g.fillStyle = long ? '#c9a85e' : '#8f7642';
+    for (let k = 0; k < 8; k++) {
+      const a = (k * 45 + (long ? 0 : 22.5));
+      const tip = pt(a, rose * 0.96), l = pt(a - 90, rose * (long ? 0.14 : 0.10)), r2 = pt(a + 90, rose * (long ? 0.14 : 0.10));
+      g.beginPath(); g.moveTo(...tip); g.lineTo(l[0], l[1]); g.lineTo(C, C); g.lineTo(r2[0], r2[1]); g.closePath(); g.fill();
+    }
+  }
+  g.fillStyle = '#2c2418'; g.beginPath(); g.arc(C, C, rose * 0.12, 0, 7); g.fill();
+  // cardinal letters just outside the rose
+  g.font = '700 40px system-ui, sans-serif'; g.fillStyle = '#efe7d4';
+  for (const [lbl, b] of [['N', 0], ['E', 90], ['S', 180], ['W', 270]]) g.fillText(lbl, ...pt(b, rose + 34));
+  // dedication text under the rose
+  g.font = '600 22px system-ui, sans-serif'; g.fillStyle = '#3a3327';
+  g.fillText('COUNCIL  CREST', C, C + rose + 70);
+  g.fillText('ELEV 1073 FT', C, C + rose + 100);
+
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return tex;
+}
+
+function buildSummit() {
+  const gy = demSample(LNG0, LAT0) * EXAG;
+  PLAZA_TOP = gy + 0.06;
+  const stone = new THREE.MeshLambertMaterial({ color: '#aaa190' });
+
+  // terrace body — a low cylinder whose skirt covers the terrain falling away beneath the deck
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(PLAZA_R, PLAZA_R + 0.4, 3, 64), stone);
+  body.position.set(0, PLAZA_TOP - 1.5, 0);
+  scene.add(body);
+  // compass-rose deck
+  const deck = new THREE.Mesh(new THREE.CircleGeometry(PLAZA_R - 0.4, 96),
+    new THREE.MeshLambertMaterial({ map: makeCompassTexture() }));
+  deck.rotateX(-Math.PI / 2); deck.position.set(0, PLAZA_TOP + 0.02, 0);
+  scene.add(deck);
+  // low seat wall around the rim
+  const wall = new THREE.Mesh(new THREE.CylinderGeometry(PLAZA_R + 0.3, PLAZA_R + 0.3, 0.5, 64, 1, true),
+    new THREE.MeshLambertMaterial({ color: '#8f8676', side: THREE.DoubleSide }));
+  wall.position.set(0, PLAZA_TOP + 0.2, 0);
+  scene.add(wall);
+
+  // broadcast lattice tower on the rise to the south (a Council Crest skyline signature)
+  const tg = groundAt(TOWER.x, TOWER.z);
+  const tower = new THREE.Mesh(makeTowerGeo(TOWER.h, 2.4, 0.6, 14),
+    new THREE.MeshLambertMaterial({ color: '#9aa1a8' }));
+  tower.position.set(TOWER.x, tg, TOWER.z);
+  scene.add(tower);
+  // antenna spire + red aircraft-warning beacon
+  const spire = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.18, 12, 6),
+    new THREE.MeshLambertMaterial({ color: '#b9bfc5' }));
+  spire.position.set(TOWER.x, tg + TOWER.h + 6, TOWER.z);
+  scene.add(spire);
+  const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.7, 10, 8),
+    new THREE.MeshBasicMaterial({ color: '#ff2a18', fog: false }));
+  beacon.position.set(TOWER.x, tg + TOWER.h + 12.4, TOWER.z);
+  scene.add(beacon);
+  // a couple of microwave drums partway up
+  for (const [hy, ang] of [[0.45, 0.4], [0.62, 3.5]]) {
+    const drum = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 0.7, 16),
+      new THREE.MeshLambertMaterial({ color: '#cdd2d6' }));
+    drum.rotation.z = Math.PI / 2; drum.rotation.y = ang;
+    drum.position.set(TOWER.x + Math.cos(ang) * 1.6, tg + TOWER.h * hy, TOWER.z + Math.sin(ang) * 1.6);
+    scene.add(drum);
+  }
+}
+
 // ---- build everything ----
 let SAT, ready = false;
 async function build() {
@@ -443,6 +594,9 @@ async function build() {
   // lawn ringed by Douglas-fir + western red cedar — refs in NOTES #10). The satellite
   // drape reads as flat green at eye level; instanced conifers give the hill real depth.
   plantForest();
+
+  // the real summit: a circular compass-rose viewing plaza + the broadcast tower to the south
+  buildSummit();
 
   // spawn on the summit
   teleport(LNG0, LAT0, 40, -6);
@@ -773,6 +927,7 @@ window.__pauseSim = false;
 window.__fpsReady = false;
 window.__touchMode = TOUCH;                 // true on coarse-pointer devices (touch HUD shown)
 window.__treeCount = () => TREES;           // forest sanity check for the headless harness
+window.__hasSummit = () => PLAZA_TOP !== null;   // plaza/tower built
 // audio harness (headless can't hear — these confirm the graph wires up without throwing)
 window.__initAudio = () => { initAudio(); return window.__audioState(); };
 window.__audioState = () => audio ? { state: audio.ctx.state, sampleRate: audio.ctx.sampleRate, masterGain: audio.master.gain.value } : null;

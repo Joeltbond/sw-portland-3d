@@ -9,6 +9,8 @@ const VIEWS = [
   ['fps-summit-ne.png', -122.7076, 45.4983, 40, -6],     // summit, out over the city
   ['fps-summit-down.png', -122.7076, 45.4983, 150, -20], // summit, down the wooded slope
   ['fps-slope.png', -122.7050, 45.4955, 320, -2],        // partway down, looking back up
+  ['fps-plaza.png', -122.7076, 45.4983, 90, -42],        // spawn, look down at the compass-rose deck
+  ['fps-tower.png', -122.7076, 45.4983, 172, 6],         // summit → the broadcast tower (SSE)
 ];
 
 (async () => {
@@ -44,6 +46,7 @@ const VIEWS = [
   });
   console.log('audio:', JSON.stringify(audio));
   console.log('trees:', await page.evaluate(() => window.__treeCount && window.__treeCount()));
+  console.log('summit:', await page.evaluate(() => window.__hasSummit && window.__hasSummit()));
 
   for (const [file, lng, lat, heading, pitch] of VIEWS) {
     await page.evaluate((lng, lat, heading, pitch) => window.__look(lng, lat, heading, pitch),
