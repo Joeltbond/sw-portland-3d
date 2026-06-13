@@ -59,6 +59,32 @@ harnesses now point there). shoot-fps.js loads `index.html`. New game work happe
   hill. NOT YET DONE — do this before trees/landmarks; record refs used here.
 
 ## Iteration log
+- **#24 (2026-06-12)** DRIFTING CUMULUS SKY — the largest screen area, the bare blue gradient
+  sky dome, was the last empty surface: the Mt Hood hero shot had nothing above the peaks. Added a
+  summer-cumulus cloud layer (`makeClouds()`): scattered puffy clouds painted onto a TRANSPARENT
+  4096×1024 canvas and wrapped on a **BackSide sphere R=3800** — set BETWEEN the backdrop cylinder
+  (R=3500) and the sky dome (R=4000), fog-exempt, `renderOrder −2` so the peaks/ridges (backdrop
+  −1) occlude the cloud bases in the transparent pass, not the reverse. The whole bank **drifts**
+  via `cloudMesh.rotation.y = elapsed·0.004` in the render loop. Each cumulus = a faint grey
+  under-belly + a lumpy bright-white cauliflower body (taller in the middle, `sin(t·π)` profile) +
+  a warm sunlit cap on the SW (upper-left) side to match the scene's low SW sun; deterministic PRNG
+  (seed 98765) → stable headless shots; each drawn 3× (−W/0/+W) so a cloud straddling the canvas
+  wrap tiles cleanly. **KEY GOTCHA — horizon-grazing smear (took 2 passes):** the first version
+  painted clouds down into the near-horizon band (canvas y 205–505, elevation ~2–55°). On a sphere
+  viewed from its centre, texels near the horizon are seen at a GRAZING angle and stretch vertically
+  → the clouds rendered as dark "dripping" vertical streaks (same failure mode as the old MapLibre
+  drape). Fix: **(a)** raise the band to canvas y 140–350 (elevation ~28–65°, well above the grazing
+  zone), **(b)** harden the puff gradient (opaque white out to 70% radius, then a short fade — crisp
+  edges don't smear), **(c)** push opacity to 0.78–1.0 and lighten the under-belly so they read as
+  bright cumulus, not muddy grey. After that they render as clean white puffs high in the sky.
+  Verified headless: exit 0, `clouds:true`, trees 11923, grass 4670, summit/fountain/water/path all
+  true, FOV kick + edge + pause intact, all views render, no page/console errors. `fps-hood.png`
+  shows a cumulus band across the upper sky framing Mt Hood (the hero shot); `fps-helens.png` /
+  `fps-slope.png` (conifers silhouetted against a cloud) confirm it from other angles; the down-
+  slope / lawn / plaza shots are unaffected. **The slow drift is FELT live — a still can't show it;
+  Joel's eyes confirm the motion.** New hook `__hasClouds`; harness logs `clouds:`. Possible polish:
+  vary cloud altitude/size more so the band feels less like a single layer; a faint cast shadow on
+  the terrain under the biggest clouds; tie cloud opacity to the same wind LFO that swells the audio.
 - **#23 (2026-06-12)** TREE SPECIES VARIETY — the deepest remaining "real place" win (backlog #1/#9):
   the forest ring was ~11.9k IDENTICAL narrow Douglas-fir cones, reading as a wall of clones. **Refs:**
   WebSearch → oregonhikers (Marquam Trail to Council Crest) + Portland.gov — "Douglas-fir, western
@@ -542,8 +568,10 @@ Boundary (#15) + pause/help (#20) are now done too — remaining work is pure wo
    child in raised arms, ~3 m on a triangular granite base. Still open: sharper plaza paver/
    inlay texture; jetting fountain water.
 0b. ~~**Richer illustrated backdrop**~~ — DONE in #9 (painted panorama cylinder: real-bearing
-   Cascade peaks + layered ridgelines, Hood is the hero). Possible polish: clouds/alpenglow,
-   parallax, sharper peak rock/snow texture, time-of-day tint matching the sun.
+   Cascade peaks + layered ridgelines, Hood is the hero); ~~clouds~~ DONE in #24 (drifting cumulus
+   sky layer on a BackSide sphere between backdrop and sky dome). Possible polish: alpenglow,
+   parallax, sharper peak rock/snow texture, time-of-day tint matching the sun; vary cloud
+   altitude/size more, a faint cloud cast-shadow on the terrain.
 1. ~~**Trees / forest**~~ — DONE in #10 (~11.9k instanced conifers, planted on the imagery's green
    mask, summit clearing kept open); ~~wind sway~~ + ~~soften the near-black shaded sides~~ DONE in
    #19 (vertex-shader crown sway + emissive green floor); ~~vary species~~ DONE in #23 (fir + western

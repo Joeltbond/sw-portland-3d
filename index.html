@@ -407,6 +407,71 @@ function makeBackdrop() {
 }
 scene.add(makeBackdrop());
 
+// ---- drifting cumulus clouds in the open sky ----
+// The sky dome (above the painted backdrop ridgeline) was a bare blue gradient, so the
+// summer-hillside payoff shots (Hood at the horizon) had an empty sky above the peaks.
+// Paint scattered cumulus onto a transparent canvas wrapped on a BackSide sphere set
+// BETWEEN the backdrop cylinder (R=3500) and the sky dome (R=4000), fog-exempt. Clouds
+// only occupy the band just ABOVE the horizon up to ~mid-sky (so the zenith pole-pinch
+// never shows and the peaks/ridges paint over their bases). renderOrder -2 puts them
+// behind the backdrop (-1) in the transparent pass → peaks occlude clouds, not vice-versa.
+// The mesh slowly rotates around Y in the render loop so the whole bank drifts.
+let cloudMesh = null;
+function makeClouds() {
+  const W = 4096, H = 1024;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d');
+  let s = 98765; const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+  // hard-cored radial puff: opaque white out to 70% radius, then a short fade — keeps the
+  // edges crisp so they don't smear into soft vertical streaks when the sphere is viewed
+  // at a grazing angle near the top of frame.
+  const puff = (cx, cy, r, alpha, col) => {
+    const gr = g.createRadialGradient(cx, cy - r * 0.18, r * 0.5, cx, cy, r);
+    gr.addColorStop(0, `rgba(${col},${alpha})`);
+    gr.addColorStop(0.7, `rgba(${col},${alpha})`);
+    gr.addColorStop(1, `rgba(${col},0)`);
+    g.fillStyle = gr; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
+  };
+  // one cumulus: a light grey under-belly, a lumpy bright-white body (taller in the middle),
+  // and a warm sunlit cap on the SW (upper-left) side to match the scene's low SW sun.
+  const cumulus = (cx, cy, scale, op) => {
+    const baseY = cy + scale * 0.40;
+    for (let i = 0; i < 5; i++) {                       // faint shadowed base
+      const ox = cx + (rnd() - 0.5) * scale * 1.7;
+      puff(ox, baseY - scale * 0.04, scale * (0.40 + rnd() * 0.16), op * 0.35, '212,216,226');
+    }
+    const lumps = 6 + Math.floor(rnd() * 4);            // white body, cauliflower top
+    for (let i = 0; i < lumps; i++) {
+      const t = i / (lumps - 1);
+      const ox = cx + (t - 0.5) * scale * 1.9 + (rnd() - 0.5) * scale * 0.3;
+      const oy = baseY - scale * (0.22 + 0.55 * Math.sin(t * Math.PI)) - rnd() * scale * 0.16;
+      puff(ox, oy, scale * (0.38 + rnd() * 0.24), op, '255,255,255');
+    }
+    puff(cx - scale * 0.40, baseY - scale * 0.68, scale * 0.42, op, '255,252,243');  // sunlit cap
+  };
+  // canvas y 140..350 → texture v 0.66..0.86 (sphere, flipY) = ~28°–65° elevation, well ABOVE
+  // the grazing horizon band (where any sphere texture smears vertically), so the cumulus read
+  // as crisp puffs high in the sky rather than streaks dripping down toward the peaks.
+  for (let i = 0; i < 22; i++) {
+    const cx = rnd() * W;
+    const cy = 140 + rnd() * 210;
+    const scale = 56 + rnd() * 96;
+    const op = 0.78 + rnd() * 0.22;
+    for (const off of [-W, 0, W]) cumulus(cx + off, cy, scale, op);   // wrap across the seam
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  const geo = new THREE.SphereGeometry(3800, 48, 24);
+  const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, transparent: true, depthWrite: false, fog: false });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.renderOrder = -2;
+  return mesh;
+}
+cloudMesh = makeClouds();
+scene.add(cloudMesh);
+
 // Lighting for a satellite-draped hill: the imagery already carries baked sun and
 // shadow, so keep a bright flat fill (ambient + hemisphere) and add only a gentle
 // directional for form — otherwise slopes facing away from the sun crush to black.
@@ -1479,6 +1544,7 @@ renderer.setAnimationLoop(() => {
   if (ready && !window.__pauseSim) step(dt);
   if (grassWind) grassWind.value = clock.elapsedTime;   // roll the summit grass in the breeze
   if (treeWind) treeWind.value = clock.elapsedTime;     // and sway the forest crowns
+  if (cloudMesh) cloudMesh.rotation.y = clock.elapsedTime * 0.004;  // the cumulus bank drifts slowly
   // boundary atmosphere (driven off step()'s edgeView; written here so the test's tight
   // fixed-timestep loops don't thrash the DOM)
   vignetteEl.style.opacity = edgeView.toFixed(3);
@@ -1498,6 +1564,7 @@ window.__key = (k, down) => { if (down) keys.add(k); else keys.delete(k); };
 window.__jump = () => { wantJump = true; };
 window.__groundY = () => groundAt(player.x, player.z) + EYE;
 window.__fov = () => camera.fov;            // sprint FOV-kick check for the headless harness
+window.__hasClouds = () => !!cloudMesh;     // drifting cumulus sky layer present
 window.__edge = () => ({ edge: +edgeView.toFixed(3), r: +Math.hypot(player.x, player.z).toFixed(1), fogFar: +scene.fog.far.toFixed(0) });
 window.__step = (dt) => step(dt);       // fixed-timestep drive for deterministic physics tests
 window.__pauseSim = false;

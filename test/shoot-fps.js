@@ -56,6 +56,7 @@ const VIEWS = [
   console.log('fountain:', await page.evaluate(() => window.__hasFountain && window.__hasFountain()));
   console.log('water:', await page.evaluate(() => window.__hasWater && window.__hasWater()));
   console.log('path:', await page.evaluate(() => window.__hasPath && window.__hasPath()));
+  console.log('clouds:', await page.evaluate(() => window.__hasClouds && window.__hasClouds()));
 
   // ---- sprint FOV kick: drive forward+sprint via fixed-timestep, FOV should widen from base
   // (~75) toward ~83, then ease back to base when the sprint stops. Then shoot the kicked view.
