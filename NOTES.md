@@ -54,6 +54,24 @@ hooks instead: `window.__pauseSim=true; window.__step(1/60)` in a loop, read
   hill. NOT YET DONE — do this before trees/landmarks; record refs used here.
 
 ## Iteration log
+- **#12 (18:48–18:58)** NEAR-GROUND DETAIL — the flat-green eye-level tell (backlog #2;
+  Joel's "flat green" note). The z17 satellite drape minifies to a smooth dark-green wash
+  underfoot; now a **procedural luminance grain** modulates it, strong underfoot and faded
+  out by ~180 m so the far hill keeps its true satellite look. `makeGroundDetail()` paints a
+  **seamless tileable** 256² grayscale noise — periodic sine octaves (cycles/tile are
+  integers so they wrap exactly across the edge → no seam) + faint vertical blade streaks.
+  Injected into the terrain `MeshLambertMaterial` via `onBeforeCompile`: a `vWP` world-pos
+  varying (from `modelMatrix*position` after `#include <begin_vertex>`) drives two
+  world-space samples — fine (~1.8 m tile) blended with coarse (~9 m patchiness) — centered
+  to ±0.5 and applied as `diffuseColor.rgb *= 1.0 + n*0.85*k` after `<map_fragment>`, where
+  `k = 1 - smoothstep(12,180, dist(uCam,vWP))`. **Hue-neutral** (multiply by luminance only)
+  so roads/the plaza deck aren't tinted; world-space UV so it doesn't swim with the camera.
+  `uCam` uniform = `camera.position` (live Vector3 ref, auto-updates per frame, no rAF poke).
+  Verified headless (fps-slope: the foreground lawn now reads as mottled grass/dirt vs the
+  old flat wash; far trees/ground unchanged; Hood hero clean), 11767 trees, summit true, no
+  page/console errors. Gotcha: keep the noise periodic (integer cycles/tile) or the
+  RepeatWrapping tile shows a hard seam; only the terrain mesh gets the shader (plaza deck is
+  a separate mesh, stays clean). Next foreground polish: a normal map / wind-stirred grass.
 - **#11 (18:22–18:40)** SUMMIT LANDMARKS — the real Council Crest summit, the spawn anchor
   (backlog #3). **Refs used:** Portland.gov + placespages blog + oregonhikers + Wikipedia +
   RadioDiscussions/Yelp(Stonehenge Tower) — confirmed the circular paved viewing plaza with
@@ -256,10 +274,10 @@ hooks instead: `window.__pauseSim=true; window.__step(1/60)` in a loop, read
    broadleaf/cedar shapes), wind sway, billboard-LOD the far trees, soften the hard cone
    shading (they read near-black on shadowed sides), and thin the canopy a touch if it feels
    too uniform on the live page.
-2. **Sharpen the near foreground** — even at z17 the immediate ground under the eye is
-   soft (grazing-angle minification). Options: a tiling detail/noise texture blended in
-   near the camera, a ground normal map, or a subtle near vignette so the eye reads it
-   as distance not blur. Trees (#1) will mostly hide this.
+2. ~~**Sharpen the near foreground**~~ — DONE in #12 (procedural luminance grain modulating
+   the satellite drape, strong underfoot, faded by ~180 m, hue-neutral & world-space tiled).
+   Possible polish: a matching ground normal map for relief; wind-stirred grass billboards on
+   the summit lawn; tint the grain very slightly green/tan to push the grass vs dirt read.
 3. ~~**Summit landmarks**~~ — DONE in #11 (compass-rose viewing plaza you spawn on, rays at
    true peak bearings + a broadcast lattice tower S). Possible polish: the Littmann bronze
    fountain statue as geometry, sharper paver/brass inlay texture, a low railing at the rim,

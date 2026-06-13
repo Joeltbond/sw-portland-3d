@@ -560,6 +560,34 @@ function buildSummit() {
   }
 }
 
+// Seamless, tileable ground-detail grain (luminance only). Periodic value-noise (sine
+// octaves wrap exactly over the tile) plus faint vertical blade streaks → reads as grass/
+// dirt texture when multiplied onto the satellite drape near the camera.
+function makeGroundDetail() {
+  const S = 256, cv = document.createElement('canvas');
+  cv.width = cv.height = S;
+  const ctx = cv.getContext('2d'), img = ctx.createImageData(S, S), d = img.data;
+  const oct = [[1, 1.0], [2, 0.55], [4, 0.32], [8, 0.18], [16, 0.1]];  // [cycles/tile, amp]
+  let amp = 0; for (const [, a] of oct) amp += a;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    let n = 0;
+    for (const [f, a] of oct)
+      n += a * Math.sin(2 * Math.PI * f * x / S + 1.7 * f) *
+               Math.sin(2 * Math.PI * f * y / S + 0.9 * f);
+    n /= amp;                                              // → roughly [-1, 1]
+    const blade = 0.12 * Math.sin(2 * Math.PI * 24 * x / S);  // fine vertical streaks
+    let v = 0.5 + 0.42 * n + blade;
+    v = v < 0 ? 0 : v > 1 ? 1 : v;
+    const i = (y * S + x) * 4;
+    d[i] = d[i + 1] = d[i + 2] = 255 * v; d[i + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.needsUpdate = true;
+  return t;
+}
+
 // ---- build everything ----
 let SAT, ready = false;
 async function build() {
@@ -588,6 +616,27 @@ async function build() {
   geo.rotateX(-Math.PI / 2);              // lay flat: plane y → world z (north → -z)
   geo.computeVertexNormals();
   const mat = new THREE.MeshLambertMaterial({ map: tex });
+  // Near-ground detail: the z17 satellite drape minifies to flat green at eye level, so
+  // modulate it with a tileable, seamless grain that's strong underfoot and fades out by
+  // ~180 m (the far hill keeps its true satellite look). Neutral luminance — adds ground
+  // "blade/dirt" texture without tinting roads/plaza. World-space tiled so it doesn't swim.
+  const detailTex = makeGroundDetail();
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uDetail = { value: detailTex };
+    sh.uniforms.uCam = { value: camera.position };   // live Vector3 ref → updates per frame
+    sh.vertexShader = 'varying vec3 vWP;\n' + sh.vertexShader.replace(
+      '#include <begin_vertex>',
+      '#include <begin_vertex>\n  vWP = (modelMatrix * vec4(position, 1.0)).xyz;');
+    sh.fragmentShader = 'uniform sampler2D uDetail;\nuniform vec3 uCam;\nvarying vec3 vWP;\n' +
+      sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+      {
+        float fine   = texture2D(uDetail, vWP.xz * 0.55).r;   // ~1.8 m tile (blades)
+        float coarse = texture2D(uDetail, vWP.xz * 0.11).r;   // ~9 m tile (patchiness)
+        float n = mix(coarse, fine, 0.6) - 0.5;               // centered grain, ±0.5
+        float k = 1.0 - smoothstep(12.0, 180.0, distance(uCam, vWP));
+        diffuseColor.rgb *= 1.0 + n * 0.85 * k;               // multiplicative, hue-neutral
+      }`);
+  };
   scene.add(new THREE.Mesh(geo, mat));
 
   // ring the wooded slopes with Douglas-firs (real Council Crest: an open grassy summit
