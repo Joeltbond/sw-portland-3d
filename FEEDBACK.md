@@ -13,7 +13,13 @@ normal backlog.
 
 ## Pending
 
-_(none)_
+- 2026-06-12 (Joel) — There's a weird seam where the two ends of the background
+  backdrop meet (the painted skyline/horizon ring doesn't wrap seamlessly —
+  visible discontinuity where start meets end). Make the panorama tile/blend
+  cleanly so there's no join.
+- 2026-06-12 (Joel) — There should be a large water tower in between the compass
+  and the radio tower. Look for reference photos online; it should also be
+  visible on the map texture. Add it at its true position/bearing.
 
 ## Handled
 
