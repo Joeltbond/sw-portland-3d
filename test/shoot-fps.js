@@ -31,6 +31,17 @@ const VIEWS = [
   });
   await new Promise(r => setTimeout(r, 1500));
 
+  // audio graph: build it and fire each synth — headless can't hear, but this proves
+  // the Web Audio graph constructs and footstep/chirp run without throwing.
+  const audio = await page.evaluate(() => {
+    try {
+      const s = window.__initAudio();
+      window.__footstep(false); window.__footstep(true); window.__chirp();
+      return s;
+    } catch (e) { return { error: e.message }; }
+  });
+  console.log('audio:', JSON.stringify(audio));
+
   for (const [file, lng, lat, heading, pitch] of VIEWS) {
     await page.evaluate((lng, lat, heading, pitch) => window.__look(lng, lat, heading, pitch),
       lng, lat, heading, pitch);

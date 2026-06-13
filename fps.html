@@ -209,7 +209,7 @@ async function build() {
 
 // ---- player + controls ----
 const controls = new PointerLockControls(camera, renderer.domElement);
-const player = { x: 0, y: 400, z: 0, vx: 0, vy: 0, vz: 0, onGround: false, bob: 0 };
+const player = { x: 0, y: 400, z: 0, vx: 0, vy: 0, vz: 0, onGround: false, bob: 0, stepBeat: 0 };
 const keys = new Set();
 let wantJump = false;
 const G = 20, JUMP = 6.6, WALK = 4.6, SPRINT = 1.85, ACCEL_G = 11, ACCEL_A = 2.5;
@@ -228,15 +228,17 @@ function teleport(lng, lat, headingDeg, pitchDeg = 0) {
 }
 
 const play = document.getElementById('play');
-play.addEventListener('click', () => controls.lock());
+play.addEventListener('click', () => { initAudio(); controls.lock(); });   // the click is the audio gesture
 controls.addEventListener('lock', () => {
   play.style.display = 'none';
   document.getElementById('crosshair').style.display = 'block';
   document.getElementById('spot').style.display = 'block';
+  fadeAmbient(1);
 });
 controls.addEventListener('unlock', () => {
   play.style.display = 'flex';
   document.getElementById('crosshair').style.display = 'none';
+  fadeAmbient(0.18);                          // duck the hillside while paused
 });
 
 addEventListener('keydown', e => {
@@ -254,6 +256,90 @@ addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
 });
+
+// ---- sound: footsteps + summer-hillside ambient (Web Audio, all procedural) ----
+// Browsers block audio until a user gesture, so the AudioContext is built on the
+// click-to-enter. Everything is synthesised — no asset files, page stays self-contained.
+let audio = null;
+function initAudio() {
+  if (audio) { if (audio.ctx.state === 'suspended') audio.ctx.resume(); fadeAmbient(1); return; }
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return null;
+  const ctx = new Ctx();
+  const master = ctx.createGain(); master.gain.value = 0; master.connect(ctx.destination);
+  master.gain.setTargetAtTime(0.9, ctx.currentTime, 1.4);          // gentle fade-in
+
+  // one shared 2 s noise buffer (deterministic; reused by every layer)
+  const noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+  const nd = noiseBuf.getChannelData(0);
+  let seed = 1234567;
+  for (let i = 0; i < nd.length; i++) { seed = (seed * 16807) % 2147483647; nd[i] = seed / 1073741823.5 - 1; }
+
+  const ambient = ctx.createGain(); ambient.gain.value = 1; ambient.connect(master);
+
+  // insect bed — high bandpassed noise with a fast tremolo (a chorus of crickets/cicadas)
+  const ins = ctx.createBufferSource(); ins.buffer = noiseBuf; ins.loop = true;
+  const insBp = ctx.createBiquadFilter(); insBp.type = 'bandpass'; insBp.frequency.value = 4900; insBp.Q.value = 7;
+  const insG = ctx.createGain(); insG.gain.value = 0.05;
+  const trem = ctx.createOscillator(); trem.type = 'sine'; trem.frequency.value = 7.3;
+  const tremG = ctx.createGain(); tremG.gain.value = 0.028;
+  trem.connect(tremG); tremG.connect(insG.gain);
+  ins.connect(insBp); insBp.connect(insG); insG.connect(ambient);
+  ins.start(); trem.start();
+
+  // low air/wind bed — lowpassed noise with a slow swell so the loop never reads as seamed
+  const wind = ctx.createBufferSource(); wind.buffer = noiseBuf; wind.loop = true;
+  const windLp = ctx.createBiquadFilter(); windLp.type = 'lowpass'; windLp.frequency.value = 430; windLp.Q.value = 0.6;
+  const windG = ctx.createGain(); windG.gain.value = 0.055;
+  const windLfo = ctx.createOscillator(); windLfo.type = 'sine'; windLfo.frequency.value = 0.06;
+  const windLfoG = ctx.createGain(); windLfoG.gain.value = 0.03;
+  windLfo.connect(windLfoG); windLfoG.connect(windG.gain);
+  wind.connect(windLp); windLp.connect(windG); windG.connect(ambient);
+  wind.start(); windLfo.start();
+
+  audio = { ctx, master, ambient, noiseBuf, nextBird: ctx.currentTime + 2 };
+  return audio;
+}
+function fadeAmbient(to) { if (audio) audio.master.gain.setTargetAtTime(to * 0.9, audio.ctx.currentTime, 0.4); }
+
+// a footfall: a short filtered noise crunch; sprint shifts it brighter/quicker
+function footstep(intensity = 1, sprint = false) {
+  if (!audio || audio.ctx.state !== 'running') return;
+  const ctx = audio.ctx, t = ctx.currentTime;
+  const src = ctx.createBufferSource(); src.buffer = audio.noiseBuf;
+  src.playbackRate.value = (sprint ? 1.28 : 1.0) * (0.9 + Math.random() * 0.2);
+  const bp = ctx.createBiquadFilter(); bp.type = 'bandpass';
+  bp.frequency.value = (sprint ? 330 : 240) + Math.random() * 90; bp.Q.value = 0.8;
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1900;
+  const g = ctx.createGain();
+  const peak = Math.max(0.05, (sprint ? 0.5 : 0.38) * intensity);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(peak, t + 0.006);
+  g.gain.exponentialRampToValueAtTime(0.0006, t + 0.17);
+  src.connect(bp); bp.connect(lp); lp.connect(g); g.connect(audio.master);
+  src.start(t); src.stop(t + 0.22);
+}
+
+// an occasional bird — a few quick swept sine blips
+function chirp() {
+  if (!audio || audio.ctx.state !== 'running') return;
+  const ctx = audio.ctx, t = ctx.currentTime;
+  const notes = 2 + Math.floor(Math.random() * 3);
+  const base = 2300 + Math.random() * 1700;
+  const g = ctx.createGain(); g.gain.value = 0; g.connect(audio.master);
+  const o = ctx.createOscillator(); o.type = 'sine'; o.connect(g);
+  let tt = t;
+  for (let i = 0; i < notes; i++) {
+    const f = base * (1 + (Math.random() - 0.3) * 0.25);
+    o.frequency.setValueAtTime(f, tt);
+    o.frequency.linearRampToValueAtTime(f * (1.1 + Math.random() * 0.2), tt + 0.05);
+    g.gain.setValueAtTime(0.0001, tt);
+    g.gain.linearRampToValueAtTime(0.055, tt + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0008, tt + 0.09);
+    tt += 0.10 + Math.random() * 0.05;
+  }
+  o.start(t); o.stop(tt + 0.05);
+}
 
 // ---- physics + render loop ----
 const fwd = new THREE.Vector3(), right = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
@@ -300,11 +386,26 @@ function step(dt) {
     bobY = Math.sin(player.bob) * 0.045 * Math.min(1, hsp / WALK);
   }
   camera.position.set(player.x, player.y + bobY, player.z);
+
+  // footstep on each stride beat: a footfall every half bob-cycle (π). Bob only advances
+  // while grounded + moving, so this is naturally silent in the air and faster when sprinting.
+  if (player.onGround && hsp > 0.6) {
+    const beat = Math.floor(player.bob / Math.PI);
+    if (beat > player.stepBeat) footstep(Math.min(1, hsp / WALK), keys.has('shift'));
+    player.stepBeat = beat;
+  } else {
+    player.stepBeat = Math.floor(player.bob / Math.PI);   // resync so resuming never double-steps
+  }
 }
 
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
   if (ready && !window.__pauseSim) step(dt);
+  // occasional birdsong, scheduled off the audio clock (2.5–9.5 s apart, sometimes skipped)
+  if (audio && audio.ctx.state === 'running' && audio.ctx.currentTime > audio.nextBird) {
+    if (Math.random() < 0.7) chirp();
+    audio.nextBird = audio.ctx.currentTime + 2.5 + Math.random() * 7;
+  }
   renderer.render(scene, camera);
 });
 
@@ -317,6 +418,11 @@ window.__groundY = () => groundAt(player.x, player.z) + EYE;
 window.__step = (dt) => step(dt);       // fixed-timestep drive for deterministic physics tests
 window.__pauseSim = false;
 window.__fpsReady = false;
+// audio harness (headless can't hear — these confirm the graph wires up without throwing)
+window.__initAudio = () => { initAudio(); return window.__audioState(); };
+window.__audioState = () => audio ? { state: audio.ctx.state, sampleRate: audio.ctx.sampleRate, masterGain: audio.master.gain.value } : null;
+window.__footstep = (sprint) => footstep(1, !!sprint);
+window.__chirp = () => chirp();
 
 build().catch(e => {
   document.getElementById('loading').textContent = 'failed to build: ' + e.message;

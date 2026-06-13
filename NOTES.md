@@ -43,7 +43,33 @@ headless (dt capped at 0.05 → slow-motion), so verify movement via the fixed-t
 hooks instead: `window.__pauseSim=true; window.__step(1/60)` in a loop, read
 `window.__player` / `window.__groundY()`. Self-contained: three@0.160 via importmap CDN.
 
+## Joel's new asks (2026-06-12 17:20) — both first-class until done
+- **SOUND** — "Add sounds. Bugs, footsteps." → **LANDED in #7** (footsteps tied to
+  stride cadence + insect/bird/wind ambient bed, all procedural Web Audio). Needs Joel's
+  ears to confirm the mix; headless only proves the graph wires up.
+- **REFERENCE PHOTOS** — "looking up pictures of council crest might help." Study real
+  photos BEFORE the next visual pass: open grassy summit, circular brick/stone plaza +
+  water fountain, radio/TV towers just off-summit, Douglas-fir ring, paved loop path,
+  benches, Mt Hood / St Helens sightlines. Make the level the real place, not a generic
+  hill. NOT YET DONE — do this before trees/landmarks; record refs used here.
+
 ## Iteration log
+- **#7 (17:20–17:34)** SOUND — procedural Web Audio, no asset files (page stays
+  self-contained). **AudioContext** is built on the click-to-enter (the gesture that
+  unblocks audio); ducks to 0.18 on Esc-unlock, restores on re-lock. **Footsteps:** a
+  footfall on each half-cycle of the existing head-bob phase (`floor(bob/π)` crossings) —
+  so cadence rides real speed (faster sprinting), it's silent airborne (bob only advances
+  when grounded+moving), and a `stepBeat` resync prevents a double-step on resume. Each
+  step = a short noise crunch (bandpass→lowpass, 6 ms attack / 170 ms decay); sprint shifts
+  it brighter + 1.28× playbackRate. **Ambient bed:** one shared 2 s seeded-noise buffer
+  feeds (a) an insect layer — 4.9 kHz bandpass Q7 with a 7.3 Hz tremolo (cricket/cicada
+  chorus) and (b) a low wind bed — 430 Hz lowpass with a 0.06 Hz swell so the loop never
+  reads as seamed. Plus **birdsong:** a few swept sine blips scheduled off `ctx.currentTime`
+  every 2.5–9.5 s (30% skipped). Verified headless: graph builds `state:running` @48 kHz,
+  no page/console errors, `__footstep`/`__chirp` fire clean, and a 3 s simulated walk via
+  the fixed-timestep hook produced 8 footfalls (~2.7/s, natural). **Can't hear it headless
+  — Joel's ears confirm the mix.** Test hooks added: `__initAudio/__audioState/__footstep/
+  __chirp`; shoot-fps.js now reports the audio state line.
 - **#6 (17:05–17:18)** ENGINE PIVOT — built `fps.html`, a native three.js Council
   Crest level (slice 1: terrain mesh + satellite drape + real FPS physics). **Terrain:**
   stitch the same AWS terrarium DEM tiles (z14) onto a canvas, bilinear-decode elevation
@@ -131,6 +157,11 @@ hooks instead: `window.__pauseSim=true; window.__step(1/60)` in a loop, read
   FOV 60° in FP, 36.87° (default) in orbit. Test hooks: `__fpEnter/__fpExit/__fp`.
 
 ## Next ideas (three.js fps.html is now the main track — priority order)
+0. **Reference-photo pass (DO FIRST, before any visual work)** — study real Council
+   Crest photos (WebSearch/WebFetch), then make the summit match: grassy clearing, the
+   circular brick plaza + fountain, the radio/TV towers, the Douglas-fir ring, paved loop
+   path, benches, Mt Hood/St Helens sightlines. Record which refs were used so later
+   iterations don't re-research. Trees (#1) and landmarks (#3) both depend on this.
 1. **Trees / forest** — the single biggest "real place" win. The satellite drape shows
    canopy from above but eye-level reads as smooth green ground. Instance Douglas-fir
    billboards/low-poly cones from OSM `landuse=forest`/`natural=wood` polygons (or just
